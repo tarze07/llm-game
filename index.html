@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kostka i Kartka — zbuduj model językowy własnymi rękami</title>
+<meta name="description" content="Gra przeglądarkowa oparta na LLMs Unplugged: wytrenuj model bigramowy zliczając pary słów w siatce, a potem generuj nowy tekst rzutami kostką d10.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233f4ea8'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='monospace'>d</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap site-row">
+    <div class="brand"><span class="die">d10</span> Kostka i Kartka</div>
+    <nav class="tabs" role="tablist" aria-label="Sekcje gry">
+      <button role="tab" data-view="start" aria-selected="true">Start</button>
+      <button role="tab" data-view="train" aria-selected="false">1. Trening</button>
+      <button role="tab" data-view="gen" aria-selected="false">2. Generowanie</button>
+      <button role="tab" data-view="lab" aria-selected="false">Laboratorium</button>
+      <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
+    </nav>
+    <div class="scorebar">
+      <span>punkty <strong id="hud-score">0</strong></span>
+      <span>seria <strong id="hud-streak">0</strong></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============================ START ============================ -->
+<section class="view" id="view-start">
+  <div class="panel">
+    <div class="hero">
+      <div>
+        <span class="tag">gra edukacyjna</span>
+        <h1>Zbuduj model językowy z kartki i kostki</h1>
+        <p class="lead">
+          Duże modele językowe robią dwie rzeczy: <strong>zliczają</strong>, jakie słowa po jakich występują
+          w tekście, a potem <strong>losują</strong> kolejne słowa zgodnie z tymi liczbami. Tutaj zrobisz
+          jedno i drugie ręcznie — w przeglądarce, ale dokładnie tym samym algorytmem, którego uczy się
+          na papierze w projekcie <a href="https://www.llmsunplugged.org/modules/" target="_blank" rel="noopener">LLMs Unplugged</a>.
+        </p>
+        <ol class="steps">
+          <li><span class="n">1</span><span><strong>Trening.</strong> Przechodzisz przez tekst para po parze i wstawiasz kreski do siatki. Ta siatka <em>jest</em> twoim modelem.</span></li>
+          <li><span class="n">2</span><span><strong>Generowanie.</strong> Wybierasz słowo startowe, rzucasz kostką d10 i piszesz nowy tekst — słowo po słowie.</span></li>
+          <li><span class="n">3</span><span><strong>Laboratorium.</strong> Kręcisz gałkami: temperatura, strategie obcinania, dłuższy kontekst, zatrute dane treningowe.</span></li>
+        </ol>
+      </div>
+      <div>
+        <div class="panel" style="margin:0; background:var(--panel-2)">
+          <h3>Punkty zdobywasz za</h3>
+          <ul class="small" style="margin:0; padding-left:1.1rem">
+            <li>poprawne wstawienie kreski w siatce (+10, seria zwiększa premię),</li>
+            <li>trafne odczytanie wyniku kostki z tabeli zakresów (+15),</li>
+            <li>ukończenie treningu i dłuższe wygenerowane teksty.</li>
+          </ul>
+          <div class="badges" id="badge-list" style="margin-top:.7rem"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Wybierz tekst treningowy <span class="sub">— to wszystko, czego model się „nauczy”</span></h2>
+    <p class="small muted">Krótszy tekst = szybszy trening, ale uboższy model. Możesz też wkleić własny.</p>
+    <div class="textcards" id="text-cards"></div>
+    <div style="margin-top:.8rem">
+      <label class="field">Własny tekst (opcjonalnie)
+        <textarea id="custom-text" rows="3" placeholder="Wklej dowolny tekst — wiersz, przepis, fragment opowiadania…"></textarea>
+      </label>
+      <div class="btnrow" style="margin-top:.6rem">
+        <button class="btn" id="use-custom">Użyj własnego tekstu</button>
+        <span class="small muted" id="text-info"></span>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:1rem">
+      <button class="btn primary" id="go-train">Zacznij trening →</button>
+      <button class="btn" id="skip-train">Pomiń trening (wytrenuj automatycznie)</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TRENING ============================ -->
+<section class="view" id="view-train" hidden>
+  <div class="panel">
+    <h2>1. Trening: policz pary słów <span class="sub">— moduł „Training”</span></h2>
+    <p class="small muted" style="margin-bottom:.6rem">
+      Przesuwasz się przez tekst po jednym słowie. Dla każdej pary
+      <span class="tag" style="background:var(--accent);color:#fff">poprzednie</span>
+      <span class="tag" style="background:var(--amber);color:#22200f">następne</span>
+      kliknij komórkę w wierszu poprzedniego słowa i kolumnie następnego — to jedna kreska.
+    </p>
+    <div class="tokenstrip" id="token-strip" aria-label="Tekst treningowy podzielony na tokeny"></div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <div class="progress" style="flex:1 1 200px"><div id="train-progress"></div></div>
+      <span class="small mono muted" id="train-counter">0 / 0 par</span>
+      <button class="btn" id="train-hint">Podpowiedź</button>
+      <button class="btn" id="train-auto">Dokończ automatycznie</button>
+      <button class="btn" id="train-reset">Od nowa</button>
+      <button class="btn" id="train-change">Zmień tekst</button>
+    </div>
+    <div class="msg info" id="train-msg" style="margin-top:.7rem">Kliknij komórkę dla pierwszej pary słów.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Twój model <span class="sub">— siatka bigramowa</span></h2>
+    <div class="gridwrap"><div id="grid-host"></div></div>
+    <p class="small muted" style="margin-top:.6rem">
+      Wiersz = słowo poprzednie, kolumna = słowo następne. Kreska w komórce oznacza:
+      „w tekście treningowym po tym słowie wystąpiło tamto”.
+    </p>
+    <div class="btnrow"><button class="btn primary" id="train-to-gen" hidden>Model gotowy — generuj tekst →</button></div>
+  </div>
+</section>
+
+<!-- ============================ GENEROWANIE ============================ -->
+<section class="view" id="view-gen" hidden>
+  <div class="panel">
+    <h2>2. Generowanie: losuj kolejne słowa <span class="sub">— moduł „Generation”</span></h2>
+    <p class="small muted" id="gen-model-info"></p>
+    <div class="settings">
+      <label class="field">Kontekst
+        <select id="set-order">
+          <option value="2">bigram — 1 poprzednie słowo</option>
+          <option value="3">trigram — 2 poprzednie słowa</option>
+        </select>
+      </label>
+      <label class="field">Temperatura
+        <select id="set-temp"></select>
+      </label>
+      <label class="field">Strategia obcinania
+        <select id="set-strategy"></select>
+      </label>
+      <label class="field" id="k-field">Parametr k
+        <input type="number" id="set-k" value="2" min="1" max="9">
+      </label>
+      <label class="field">Tryb
+        <select id="set-mode">
+          <option value="manual">ręczny — sam odczytujesz kostkę</option>
+          <option value="auto">automatyczny — komputer rzuca i wybiera</option>
+        </select>
+      </label>
+    </div>
+    <p class="small muted" id="setting-desc" style="margin:.6rem 0 0"></p>
+  </div>
+
+  <div class="genlayout">
+    <div>
+      <div class="panel">
+        <h3>Rzut kostką</h3>
+        <div class="dicebox">
+          <div class="die-face" id="die">?</div>
+          <div style="flex:1 1 200px">
+            <div class="btnrow">
+              <button class="btn primary" id="btn-roll">Rzuć kostką</button>
+              <button class="btn" id="btn-auto-run">Autoplay ▶</button>
+              <button class="btn" id="btn-undo">Cofnij słowo</button>
+            </div>
+            <p class="small muted" id="dice-info" style="margin:.5rem 0 0">
+              Wybierz słowo startowe poniżej, żeby zacząć.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Możliwe następne słowa <span class="sub" id="ctx-label"></span></h3>
+        <div id="cands-host"><p class="small muted">Najpierw wybierz słowo startowe.</p></div>
+      </div>
+
+      <div class="panel">
+        <h3>Słowo startowe</h3>
+        <p class="small muted">Kliknij dowolne słowo, które w tekście treningowym miało następniki. W nawiasie liczba możliwych następników.</p>
+        <div class="chips" id="start-chips"></div>
+        <div class="btnrow" style="margin-top:.6rem"><button class="btn" id="btn-random-start">Losowe słowo startowe</button></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h3>Wygenerowany tekst</h3>
+        <div class="output" id="gen-output"><span class="muted small">Tu pojawi się tekst twojego modelu…</span></div>
+        <div class="btnrow" style="margin-top:.7rem">
+          <button class="btn" id="btn-copy">Kopiuj</button>
+          <button class="btn" id="btn-clear">Wyczyść</button>
+          <span class="small mono muted" id="gen-stats">0 słów</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Co się właśnie stało?</h3>
+        <div class="small" id="gen-log"><p class="muted">Dziennik kroków generowania pojawi się tutaj.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LABORATORIUM ============================ -->
+<section class="view" id="view-lab" hidden>
+  <div class="panel">
+    <h2>Laboratorium <span class="sub">— moduły „Sampling”, „More Context”, „Sycophancy”</span></h2>
+    <p class="small muted">Tu nie zdobywasz punktów, tylko sprawdzasz, jak zmiany danych i ustawień zmieniają model.</p>
+    <label class="field">Tekst treningowy
+      <textarea id="lab-text" rows="6"></textarea>
+    </label>
+    <div class="btnrow" style="margin-top:.6rem">
+      <button class="btn primary" id="lab-retrain">Przelicz model</button>
+      <button class="btn" id="lab-syco">Dolej danych przypochlebnych ×3</button>
+      <button class="btn" id="lab-load">Wczytaj tekst z gry</button>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h3>Bigram (1 słowo kontekstu)</h3>
+      <div class="statgrid" id="lab-stats-2"></div>
+      <div id="lab-samples-2" style="margin-top:.8rem"></div>
+    </div>
+    <div class="panel">
+      <h3>Trigram (2 słowa kontekstu)</h3>
+      <div class="statgrid" id="lab-stats-3"></div>
+      <div id="lab-samples-3" style="margin-top:.8rem"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="btnrow"><button class="btn" id="lab-gen">Wygeneruj po 3 próbki z każdego modelu</button>
+      <span class="small muted">Trigram zwykle brzmi składniej — i zwykle po prostu odtwarza tekst treningowy.</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>Temperatura na żywo</h2>
+    <p class="small muted">Wybierz kontekst z modelu bigramowego i zobacz, jak cztery ustawienia temperatury zmieniają rozkład prawdopodobieństwa — bez zmiany choćby jednego licznika.</p>
+    <label class="field" style="max-width:260px">Kontekst (słowo poprzednie)
+      <select id="lab-ctx"></select>
+    </label>
+    <div class="grid2" id="lab-temp-host" style="margin-top:.8rem"></div>
+  </div>
+</section>
+
+<!-- ============================ ZASADY ============================ -->
+<section class="view" id="view-rules" hidden>
+  <div class="panel rules">
+    <h2>Zasady gry</h2>
+    <p>
+      Gra odtwarza w przeglądarce moduły projektu
+      <a href="https://www.llmsunplugged.org/modules/" target="_blank" rel="noopener">LLMs Unplugged</a>
+      (ANU School of Cybernetics, autor: Ben Swift), w których model językowy buduje się na kartce papieru,
+      a tekst generuje rzutami kostki. Wersja papierowa wymaga ołówka, siatki i kostki d10 — ta wersja robi
+      dokładnie to samo, tylko szybciej i z podpowiedziami.
+    </p>
+
+    <h3>Przygotowanie tekstu (tokenizacja)</h3>
+    <ul>
+      <li>wszystko zamieniamy na małe litery,</li>
+      <li>słowa <em>oraz</em> pojedyncze znaki interpunkcyjne (<code>.</code> <code>,</code> <code>!</code> <code>?</code> <code>;</code> <code>:</code>) są osobnymi „słowami” (tokenami),</li>
+      <li>cudzysłowy, nawiasy i spacje pomijamy.</li>
+    </ul>
+
+    <h3>1. Trening — budowanie modelu</h3>
+    <ol>
+      <li>Weź pierwsze słowo tekstu i wpisz je jako pierwszy wiersz i pierwszą kolumnę siatki.</li>
+      <li>Dla każdej kolejnej pary sąsiadujących słów znajdź wiersz pierwszego i kolumnę drugiego, i postaw kreskę.</li>
+      <li>Jeśli słowa nie ma jeszcze w siatce — dopisz dla niego nowy wiersz i nową kolumnę (w grze robi się to jednym kliknięciem).</li>
+      <li>Przesuń się o jedno słowo i powtarzaj aż do końca tekstu.</li>
+    </ol>
+    <p class="small muted">Gotowa siatka to cały model: liczba kresek w komórce mówi, ile razy w tekście po słowie z wiersza wystąpiło słowo z kolumny.</p>
+
+    <h3>2. Generowanie — pisanie nowego tekstu</h3>
+    <ol>
+      <li>Wybierz słowo startowe (dowolny wiersz siatki).</li>
+      <li>Popatrz na jego wiersz: to lista możliwych następnych słów wraz z licznikami.</li>
+      <li>Zamień liczniki na zakresy oczek kostki (np. 2 : 1 : 1 to <code>1–50</code>, <code>51–75</code>, <code>76–100</code>).</li>
+      <li>Rzuć kostką i zapisz słowo, w którego zakres trafiłeś.</li>
+      <li>To słowo staje się nowym słowem bieżącym — wróć do punktu 2.</li>
+    </ol>
+    <p class="small muted">
+      Gra używa d10, gdy liczniki dzielą się równo na 10 oczek; w pozostałych przypadkach dwóch kostek d10 czytanych jako liczba 1–100
+      (to sztuczka opisana w module „Sampling”).
+    </p>
+
+    <h3>Temperatura</h3>
+    <table class="simple">
+      <tr><th>zimno</th><td>bez kostki — zawsze najczęstsza opcja (greedy decoding)</td></tr>
+      <tr><th>normalnie</th><td>losowanie dokładnie według liczników</td></tr>
+      <tr><th>gorąco</th><td>do każdego licznika dodajemy 1 — rzadkie słowa zyskują szansę</td></tr>
+      <tr><th>wrzątek</th><td>liczniki ignorujemy, każda opcja jednakowo prawdopodobna</td></tr>
+    </table>
+
+    <h3>Strategie obcinania (truncation)</h3>
+    <p>Zawężają zbiór dozwolonych słów <em>zanim</em> rzucisz kostką: zachłanna, top-k, bez powtórzeń, non sequitur, aliteracja, łańcuch alfabetyczny, tylko krótkie / tylko długie, haiku 5-7-5. Jeśli po filtrze nie zostanie nic, gra wraca do pełnej listy i mówi o tym w dzienniku.</p>
+
+    <h3>Dłuższy kontekst</h3>
+    <p>Przełącznik „trigram” każe modelowi patrzeć na <em>dwa</em> poprzednie słowa. Tekst robi się składniejszy, ale model puchnie i najczęściej po prostu odtwarza tekst treningowy — bo prawie każda para słów wystąpiła w nim tylko raz. To ten sam kompromis, który w prawdziwych modelach rozwiązuje mechanizm uwagi.</p>
+
+    <h3>Utknąłeś?</h3>
+    <ul>
+      <li><strong>Brak następników</strong> — trafiłeś na słowo, które w tekście wystąpiło tylko na końcu. Wybierz nowe słowo startowe.</li>
+      <li><strong>Pętla</strong> — przy małym modelu tekst potrafi krążyć między dwoma słowami. Zmień słowo startowe, podnieś temperaturę albo dotrenuj model na dłuższym tekście.</li>
+      <li><strong>Wszędzie po jednej kresce</strong> — model jest zbyt mały, żeby było co losować. Weź dłuższy tekst.</li>
+    </ul>
+
+    <h3>Skąd to się wzięło</h3>
+    <p>
+      Oryginał: <a href="https://www.llmsunplugged.org/modules/" target="_blank" rel="noopener">llmsunplugged.org/modules</a>
+      — materiały dydaktyczne (CC BY-NC-SA 4.0) i kod (MIT) projektu
+      <a href="https://github.com/ANUcybernetics/llms-unplugged" target="_blank" rel="noopener">ANUcybernetics/llms-unplugged</a>.
+      Ta strona jest niezależną, polskojęzyczną implementacją tych samych algorytmów; teksty treningowe napisano na jej potrzeby.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    Kostka i Kartka — gra na podstawie <a href="https://www.llmsunplugged.org/" target="_blank" rel="noopener">LLMs Unplugged</a>
+    (ANU School of Cybernetics / Ben Swift). Wszystko liczy się lokalnie w twojej przeglądarce, nic nie jest wysyłane na serwer.
+  </div>
+</footer>
+
+<script src="assets/js/texts.js"></script>
+<script src="assets/js/lm.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/train.js"></script>
+<script src="assets/js/generate.js"></script>
+<script src="assets/js/lab.js"></script>
+<script>LU.boot();</script>
+</body>
+</html>
