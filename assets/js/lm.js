@@ -61,6 +61,45 @@ window.LU = window.LU || {};
     return row.get(next) || 0;
   };
 
+  /* Zmniejsza licznik o 1 (podloga 0) - regula aktualizacji z modulu RLHF.
+     Wpis, ktory spadnie do zera, znika z modelu calkowicie. */
+  LU.subCount = function (model, contextArr, next) {
+    var key = LU.ctxKey(contextArr);
+    var row = model.contexts.get(key);
+    if (!row || !row.has(next)) return 0;
+    var value = row.get(next) - 1;
+    model.pairs -= 1;
+    if (value <= 0) {
+      row.delete(next);
+      if (!row.size) { model.contexts.delete(key); model.ctxWords.delete(key); }
+      return 0;
+    }
+    row.set(next, value);
+    return value;
+  };
+
+  /* Gleboka kopia modelu - potrzebna, gdy chcemy porownac model bazowy ze zmienionym. */
+  LU.cloneModel = function (model) {
+    var copy = LU.createModel(model.order);
+    model.contexts.forEach(function (row, key) {
+      var newRow = new Map();
+      row.forEach(function (count, token) { newRow.set(token, count); });
+      copy.contexts.set(key, newRow);
+      copy.ctxWords.set(key, model.ctxWords.get(key).slice());
+    });
+    copy.vocab = model.vocab.slice();
+    copy.vocabSet = new Set(model.vocabSet);
+    copy.pairs = model.pairs;
+    return copy;
+  };
+
+  /* Liczba roznych slow (bez interpunkcji) - miara zubozenia w module Synthetic Data. */
+  LU.distinctWords = function (tokens) {
+    var set = new Set();
+    tokens.forEach(function (t) { if (!LU.isPunct(t)) set.add(t); });
+    return set.size;
+  };
+
   /* Trenuje model na liscie tokenow (przesuwane okno). */
   LU.train = function (tokens, order) {
     var model = LU.createModel(order);

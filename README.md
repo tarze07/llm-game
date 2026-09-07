@@ -16,7 +16,12 @@ na serwer.
 | **1. Trening** | Training | przechodzisz przez tekst para po parze i klikasz komórki siatki bigramowej; gra sprawdza każdą kreskę, liczy punkty i serię |
 | **2. Generowanie** | Generation, Sampling, More Context | wybierasz słowo startowe, rzucasz kostką i sam odczytujesz, w czyj zakres oczek trafiłeś; do tego temperatura, strategie obcinania i przełącznik bigram/trigram |
 | **Laboratorium** | Sampling, More Context, Sycophancy | porównanie bigramu z trigramem na tym samym tekście, podgląd rozkładów przy czterech temperaturach, dolewanie „danych przypochlebnych” do zbioru treningowego |
+| **Warsztaty** | RLHF, Synthetic Data, Agentic AI | teleturniej RLHF (ocena trzech propozycji, aktualizacja ±1 z podłogą 0, runda o reward hackingu), sztafeta danych syntetycznych z tablicą zubożenia słownika i trybem Jokera, agent zatrzymujący się na interpunkcji, żeby wywołać narzędzie |
 | **Zasady** | — | pełny opis algorytmu po polsku plus sekcja „utknąłeś?” |
+
+Do tego: **tryb dwóch graczy** (trening i generowanie na zmianę — trafienie daje punkty i oddaje kolejkę,
+pudło oddaje kolejkę bez punktów) oraz **wydruki**: pusta siatka do ołówka, wypełniona siatka z kreskami
+i książeczka modelu z gotowymi zakresami oczek.
 
 Mechaniki wzięte wprost z materiałów źródłowych:
 
@@ -25,7 +30,10 @@ Mechaniki wzięte wprost z materiałów źródłowych:
 - generowanie: zamiana liczników na zakresy oczek i losowanie — d10, gdy liczniki dzielą się równo na 10 oczek, w przeciwnym razie dwie kostki d10 czytane jako liczba 1–100;
 - temperatura: *zimno* (greedy), *normalnie*, *gorąco* (+1 do każdego licznika), *wrzątek* (rozkład jednostajny);
 - strategie obcinania: zachłanna, top-k, bez powtórzeń, non sequitur, aliteracja, łańcuch alfabetyczny, tylko krótkie / tylko długie, haiku 5-7-5;
-- dłuższy kontekst: trigram i statystyka „ile kontekstów daje realny wybór”, pokazująca, dlaczego trigram małego tekstu głównie go odtwarza.
+- dłuższy kontekst: trigram i statystyka „ile kontekstów daje realny wybór”, pokazująca, dlaczego trigram małego tekstu głównie go odtwarza;
+- RLHF: +1 dla przejść z propozycji preferowanej, −1 dla odrzuconej, licznik nigdy poniżej zera (wyzerowany wpis znika z modelu), środkowa propozycja bez zmian;
+- dane syntetyczne: każde ogniwo sztafety trenuje wyłącznie na tekście poprzednika, a tablica liczy różne słowa na wejściu i wyjściu każdego pokolenia;
+- agent: wyzwalaczem narzędzia jest znak interpunkcyjny, wynik narzędzia wchodzi do tekstu w całości, a generowanie wraca do tego znaku, nie do słów narzędzia.
 
 ## Uruchomienie
 

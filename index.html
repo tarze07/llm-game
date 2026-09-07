@@ -18,6 +18,7 @@
       <button role="tab" data-view="train" aria-selected="false">1. Trening</button>
       <button role="tab" data-view="gen" aria-selected="false">2. Generowanie</button>
       <button role="tab" data-view="lab" aria-selected="false">Laboratorium</button>
+      <button role="tab" data-view="shop" aria-selected="false">Warsztaty</button>
       <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
     </nav>
     <div class="scorebar">
@@ -80,6 +81,23 @@
       <button class="btn" id="skip-train">Pomiń trening (wytrenuj automatycznie)</button>
     </div>
   </div>
+
+  <div class="panel">
+    <h2>Gracze <span class="sub">— w pojedynkę albo na zmianę</span></h2>
+    <p class="small muted">
+      W trybie dwóch graczy trening i generowanie idą na zmianę: trafienie daje punkty i oddaje kolejkę,
+      pudło oddaje kolejkę bez punktów. Wygrywa ten, kto ma więcej punktów, gdy skończycie tekst.
+    </p>
+    <div class="btnrow">
+      <button class="btn primary" id="mode-solo">1 gracz</button>
+      <button class="btn" id="mode-duo">2 graczy</button>
+    </div>
+    <div id="player-names" class="btnrow" style="margin-top:.7rem" hidden>
+      <label class="field">Imię gracza 1<input type="text" id="p1-name" value="Gracz 1" maxlength="16"></label>
+      <label class="field">Imię gracza 2<input type="text" id="p2-name" value="Gracz 2" maxlength="16"></label>
+      <button class="btn" id="duel-reset">Wyzeruj wynik pojedynku</button>
+    </div>
+  </div>
 </section>
 
 <!-- ============================ TRENING ============================ -->
@@ -92,6 +110,7 @@
       <span class="tag" style="background:var(--amber);color:#22200f">następne</span>
       kliknij komórkę w wierszu poprzedniego słowa i kolumnie następnego — to jedna kreska.
     </p>
+    <div data-duel hidden></div>
     <div class="tokenstrip" id="token-strip" aria-label="Tekst treningowy podzielony na tokeny"></div>
     <div class="btnrow" style="margin-top:.7rem">
       <div class="progress" style="flex:1 1 200px"><div id="train-progress"></div></div>
@@ -111,7 +130,11 @@
       Wiersz = słowo poprzednie, kolumna = słowo następne. Kreska w komórce oznacza:
       „w tekście treningowym po tym słowie wystąpiło tamto”.
     </p>
-    <div class="btnrow"><button class="btn primary" id="train-to-gen" hidden>Model gotowy — generuj tekst →</button></div>
+    <div class="btnrow">
+      <button class="btn primary" id="train-to-gen" hidden>Model gotowy — generuj tekst →</button>
+      <button class="btn" id="print-grid">Drukuj wypełnioną siatkę</button>
+      <button class="btn" id="print-blank">Drukuj pustą siatkę (do ołówka)</button>
+    </div>
   </div>
 </section>
 
@@ -148,6 +171,7 @@
 
   <div class="genlayout">
     <div>
+      <div class="panel" data-duel hidden></div>
       <div class="panel">
         <h3>Rzut kostką</h3>
         <div class="dicebox">
@@ -183,6 +207,7 @@
         <h3>Wygenerowany tekst</h3>
         <div class="output" id="gen-output"><span class="muted small">Tu pojawi się tekst twojego modelu…</span></div>
         <div class="btnrow" style="margin-top:.7rem">
+          <button class="btn" id="print-booklet">Drukuj książeczkę modelu</button>
           <button class="btn" id="btn-copy">Kopiuj</button>
           <button class="btn" id="btn-clear">Wyczyść</button>
           <span class="small mono muted" id="gen-stats">0 słów</span>
@@ -235,6 +260,177 @@
       <select id="lab-ctx"></select>
     </label>
     <div class="grid2" id="lab-temp-host" style="margin-top:.8rem"></div>
+  </div>
+</section>
+
+<!-- ============================ WARSZTATY ============================ -->
+<section class="view" id="view-shop" hidden>
+  <div class="panel">
+    <h2>Warsztaty <span class="sub">— moduły „RLHF”, „Synthetic Data”, „Agentic AI”</span></h2>
+    <p class="small muted">
+      Trzy gry na tym samym modelu, który zbudowałeś w zakładce Trening (albo na modelu wytrenowanym
+      automatycznie z wybranego tekstu). Każda pokazuje co innego: jak preferencje ludzi przestawiają model,
+      co się dzieje, gdy model uczy się z tekstu innego modelu, i czym właściwie jest „agent”.
+    </p>
+    <div class="subtabs" role="tablist" aria-label="Warsztaty">
+      <button role="tab" data-shop="rlhf" aria-selected="true">Teleturniej RLHF</button>
+      <button role="tab" data-shop="relay" aria-selected="false">Sztafeta danych</button>
+      <button role="tab" data-shop="agent" aria-selected="false">Agent i narzędzia</button>
+    </div>
+  </div>
+
+  <!-- ---------- RLHF ---------- -->
+  <div class="shop" id="shop-rlhf">
+    <div class="panel">
+      <h3>Teleturniej RLHF <span class="sub">— model uczy się z twoich ocen, bez ani jednego nowego słowa</span></h3>
+      <p class="small muted">
+        Model generuje trzy propozycje z tego samego słowa startowego. Ty jesteś jury: wskazujesz najlepszą
+        i najgorszą. Każde przejście między słowami z propozycji <strong>najlepszej</strong> dostaje +1,
+        każde z <strong>najgorszej</strong> −1 (licznik nigdy nie schodzi poniżej zera — wpis, który spadnie
+        do zera, znika z modelu). Środkowa propozycja zostaje bez zmian. Trzy rundy wystarczą, żeby usłyszeć różnicę.
+      </p>
+      <div class="settings">
+        <label class="field">Brief jury
+          <select id="rlhf-brief"></select>
+        </label>
+        <label class="field">Słowo startowe
+          <select id="rlhf-seed"></select>
+        </label>
+        <label class="field">Długość propozycji
+          <input type="number" id="rlhf-len" value="8" min="4" max="16">
+        </label>
+        <label class="field">Runda przypochlebna
+          <select id="rlhf-syco">
+            <option value="no">bez zmian w modelu bazowym</option>
+            <option value="yes">dosyp 2 zdania przypochlebne (po jednym razie)</option>
+          </select>
+        </label>
+      </div>
+      <p class="small" id="rlhf-brief-desc" style="margin:.6rem 0 0"></p>
+      <div class="btnrow" style="margin-top:.7rem">
+        <button class="btn primary" id="rlhf-start">Nowa gra (3 rundy)</button>
+        <span class="small mono muted" id="rlhf-round">runda 0 / 3</span>
+      </div>
+    </div>
+
+    <div class="panel" id="rlhf-arena" hidden>
+      <h3>Oceń propozycje <span class="sub" id="rlhf-seed-label"></span></h3>
+      <div class="grid3" id="rlhf-cands"></div>
+      <div class="btnrow" style="margin-top:.8rem">
+        <button class="btn primary" id="rlhf-apply">Zastosuj oceny i zagraj kolejną rundę</button>
+        <span class="small muted" id="rlhf-hint">Zaznacz jedną propozycję jako najlepszą i jedną jako najgorszą.</span>
+      </div>
+    </div>
+
+    <div class="panel" id="rlhf-result" hidden>
+      <h3>Odsłona</h3>
+      <div class="grid2" id="rlhf-compare"></div>
+      <div style="margin-top:.9rem">
+        <h4>Co się zmieniło w modelu</h4>
+        <div id="rlhf-diff"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Dziennik aktualizacji</h3>
+      <div class="small" id="rlhf-log"><p class="muted">Tu pojawią się kolejne +1 i −1 w siatce.</p></div>
+    </div>
+  </div>
+
+  <!-- ---------- SZTAFETA ---------- -->
+  <div class="shop" id="shop-relay" hidden>
+    <div class="panel">
+      <h3>Sztafeta danych syntetycznych <span class="sub">— każde ogniwo uczy się tylko z tekstu poprzednika</span></h3>
+      <p class="small muted">
+        Grupa A trenuje model na prawdziwym tekście i generuje ~60 słów. Grupa B dostaje <em>tylko ten tekst</em>
+        i trenuje na nim swój model od zera. I tak dalej. Nikt poza A nie widzi oryginału. Patrz, jak szybko
+        spada liczba różnych słów — najpierw znikają te, które wystąpiły raz.
+      </p>
+      <div class="settings">
+        <label class="field">Słów na ogniwo
+          <input type="number" id="relay-words" value="60" min="20" max="120">
+        </label>
+        <label class="field">Liczba ogniw
+          <input type="number" id="relay-links" value="5" min="3" max="8">
+        </label>
+        <label class="field">Źródło ogniwa A
+          <select id="relay-source">
+            <option value="text">tekst z gry</option>
+            <option value="joker">tryb Jokera (wymyślona siatka z losowych sylab)</option>
+          </select>
+        </label>
+      </div>
+      <div class="btnrow" style="margin-top:.7rem">
+        <button class="btn primary" id="relay-start">Start sztafety</button>
+        <button class="btn" id="relay-step">Przekaż dalej →</button>
+        <button class="btn" id="relay-all">Do końca łańcucha</button>
+      </div>
+    </div>
+
+    <div class="panel" id="relay-board" hidden>
+      <h3>Tablica</h3>
+      <div class="bars" id="relay-chart"></div>
+      <table class="simple" id="relay-table" style="margin-top:.9rem"></table>
+      <div class="msg info" id="relay-msg" hidden></div>
+    </div>
+
+    <div class="panel" id="relay-texts" hidden>
+      <h3>Odczytanie łańcucha</h3>
+      <div id="relay-texts-host"></div>
+    </div>
+  </div>
+
+  <!-- ---------- AGENT ---------- -->
+  <div class="shop" id="shop-agent" hidden>
+    <div class="panel">
+      <h3>Agent i narzędzia <span class="sub">— generuj → wywołaj narzędzie → wklej wynik → generuj dalej</span></h3>
+      <p class="small muted">
+        Model pisze jak zwykle, ale kiedy wylosuje znak interpunkcyjny, generowanie <strong>staje</strong>:
+        to wywołanie narzędzia. W wersji papierowej wysyłasz wtedy SMS-a do trojga znajomych z pytaniem
+        „co było dalej?” i wpisujesz pierwszą odpowiedź. Tutaj narzędziem jesteś ty albo osoba obok —
+        wpisz odpowiedź w okienko. Potem model pisze dalej od tego samego znaku interpunkcyjnego
+        (nie od słów znajomego — na nie model nie ma wiersza w siatce).
+      </p>
+      <div class="btnrow">
+        <button class="btn primary" id="agent-start">Zacznij od losowego słowa</button>
+        <button class="btn" id="agent-step">Generuj dalej</button>
+        <button class="btn" id="agent-clear">Wyczyść</button>
+      </div>
+    </div>
+
+    <div class="panel" id="agent-call" hidden>
+      <h3>Wywołanie narzędzia</h3>
+      <p class="msg info" id="agent-question"></p>
+      <div class="btnrow">
+        <input type="text" id="agent-reply" placeholder="np. down by the river → „nad rzeką pod mostem”" style="flex:1 1 320px">
+        <button class="btn primary" id="agent-send">Wklej odpowiedź</button>
+        <button class="btn" id="agent-skip">Brak odpowiedzi — pomiń</button>
+      </div>
+      <p class="small muted" style="margin:.6rem 0 0">
+        Odpowiedź wchodzi do tekstu w całości, a zaraz za nią ten znak interpunkcyjny, który ją wywołał.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h3>Tekst agenta</h3>
+      <div class="output" id="agent-output"><span class="muted small">Tu pojawi się tekst z wplecionymi wynikami narzędzia…</span></div>
+      <p class="small muted" style="margin:.6rem 0 0">
+        <span class="tool-sample">Tak wyróżniamy</span> fragmenty, które przyszły z narzędzia, a nie z modelu.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h3>Dziennik wywołań</h3>
+      <div class="small" id="agent-log"><p class="muted">Każde wywołanie narzędzia zapiszemy tutaj.</p></div>
+      <h4 style="margin-top:1rem">Wariant: własne narzędzia</h4>
+      <p class="small muted">W wersji papierowej zamiast interpunkcji można dodać do modelu osobne słowa-wyzwalacze:</p>
+      <table class="simple">
+        <tr><th>Wyzwalacz</th><th>Narzędzie</th><th>Zwraca</th></tr>
+        <tr><td><code>AKCJA</code></td><td>wybrana osoba wykonuje drobną czynność</td><td>słowo opisujące, co zrobiła</td></tr>
+        <tr><td><code>SZUKAJ</code></td><td>ktoś z telefonem wyszukuje dalszy ciąg</td><td>jedno słowo z pierwszego wyniku</td></tr>
+        <tr><td><code>ZNAJOMY</code></td><td>wszyscy piszą do znajomego</td><td>wygrywa pierwsza odpowiedź</td></tr>
+      </table>
+    </div>
   </div>
 </section>
 
@@ -293,6 +489,34 @@
     <h3>Dłuższy kontekst</h3>
     <p>Przełącznik „trigram” każe modelowi patrzeć na <em>dwa</em> poprzednie słowa. Tekst robi się składniejszy, ale model puchnie i najczęściej po prostu odtwarza tekst treningowy — bo prawie każda para słów wystąpiła w nim tylko raz. To ten sam kompromis, który w prawdziwych modelach rozwiązuje mechanizm uwagi.</p>
 
+    <h3>Tryb dwóch graczy</h3>
+    <p>
+      Na Starcie możesz przełączyć grę na dwóch graczy. Trening i generowanie idą wtedy na zmianę:
+      trafienie daje punkty temu, kto właśnie gra, i oddaje kolejkę; pudło oddaje kolejkę bez punktów.
+      Wygrywa ten, kto ma więcej punktów po skończeniu tekstu.
+    </p>
+
+    <h3>Wydruki na papier</h3>
+    <ul>
+      <li><strong>Pusta siatka</strong> — nagłówki wierszy i kolumn plus tekst podzielony na tokeny; do wypełnienia ołówkiem, dokładnie tak jak w oryginalnych materiałach.</li>
+      <li><strong>Wypełniona siatka</strong> — twój model z kreskami w grupach po pięć.</li>
+      <li><strong>Książeczka modelu</strong> — hasło po haśle, każde z gotowymi zakresami oczek. To odpowiednik drukowanych booklets: wystarczy kostka i nie trzeba nic przeliczać.</li>
+    </ul>
+
+    <h3>Warsztaty</h3>
+    <p><strong>Teleturniej RLHF.</strong> Model generuje trzy propozycje z tego samego słowa startowego, a ty jako jury
+      wskazujesz najlepszą i najgorszą. Każde przejście z najlepszej dostaje +1, każde z najgorszej −1 (nigdy poniżej zera —
+      wpis wyzerowany znika z modelu), środkowa zostaje bez zmian. Po trzech rundach porównujesz model bazowy z wytrenowanym
+      preferencjami. Brief „zespół aprobata” to runda o reward hackingu: wystarczy nagradzać pochlebstwa, żeby model zaczął je
+      produkować — bez dosypywania ich do treningu.</p>
+    <p><strong>Sztafeta danych syntetycznych.</strong> Grupa A trenuje na prawdziwym tekście i generuje ~60 słów. Grupa B uczy
+      się wyłącznie z tego tekstu, generuje swoje, przekazuje dalej. Tablica pokazuje, jak przy każdym ogniwie spada liczba
+      różnych słów — i kiedy łańcuch „zamarza” w krótkiej pętli. Tryb Jokera robi to samo, startując od siatki wymyślonej z niczego.</p>
+    <p><strong>Agent i narzędzia.</strong> Generowanie zatrzymuje się na każdym znaku interpunkcyjnym — to wywołanie narzędzia.
+      W wersji papierowej wysyłasz wtedy SMS-a do znajomych z pytaniem „co było dalej?”; tutaj odpowiedź wpisujesz sam (albo
+      osoba obok). Odpowiedź wchodzi do tekstu, a model pisze dalej od tego znaku interpunkcyjnego, bo na słowa znajomego
+      nie ma w siatce żadnego wiersza. To cała różnica między modelem a agentem: pętla generuj → wywołaj narzędzie → wklej wynik → generuj dalej.</p>
+
     <h3>Utknąłeś?</h3>
     <ul>
       <li><strong>Brak następników</strong> — trafiłeś na słowo, które w tekście wystąpiło tylko na końcu. Wybierz nowe słowo startowe.</li>
@@ -325,6 +549,10 @@
 <script src="assets/js/train.js"></script>
 <script src="assets/js/generate.js"></script>
 <script src="assets/js/lab.js"></script>
+<script src="assets/js/print.js"></script>
+<script src="assets/js/rlhf.js"></script>
+<script src="assets/js/relay.js"></script>
+<script src="assets/js/agent.js"></script>
 <script>LU.boot();</script>
 </body>
 </html>
