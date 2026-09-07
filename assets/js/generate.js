@@ -232,11 +232,16 @@ window.LU = window.LU || {};
     if (!auto && correct && range.token !== correct.token) {
       if (tr) { tr.classList.add("wrongrow"); setTimeout(function () { tr.classList.remove("wrongrow"); }, 600); }
       LU.setStreak(0);
+      LU.duelMiss();
       $("#dice-info").innerHTML = "Wynik <strong>" + rolled + "</strong> nie mieści się w zakresie „" +
         range.token + "” (" + range.from + "–" + range.to + "). Spróbuj jeszcze raz.";
       return;
     }
-    if (!auto) { LU.addScore(15); LU.bumpStreak(); LU.state.correctRolls++; if (LU.state.correctRolls >= 10) LU.award("dice10"); }
+    if (!auto) {
+      LU.addScore(15); LU.bumpStreak(); LU.duelHit(15);
+      LU.state.correctRolls++;
+      if (LU.state.correctRolls >= 10) LU.award("dice10");
+    }
 
     var token = correct.token;
     G.out.push(token);

@@ -37,6 +37,73 @@ window.LU = window.LU || {};
     badges: {}
   };
 
+  /* --- Pojedynek: tryb dwóch graczy (trening i generowanie na zmianę) --- */
+  LU.duel = {
+    enabled: false,
+    current: 0,
+    players: [{ name: "Gracz 1", score: 0 }, { name: "Gracz 2", score: 0 }]
+  };
+
+  LU.duelSetEnabled = function (on) {
+    LU.duel.enabled = !!on;
+    $("#mode-solo").classList.toggle("primary", !on);
+    $("#mode-duo").classList.toggle("primary", !!on);
+    $("#player-names").hidden = !on;
+    LU.renderDuel();
+  };
+
+  LU.duelReset = function () {
+    LU.duel.players[0].score = 0;
+    LU.duel.players[1].score = 0;
+    LU.duel.current = 0;
+    LU.renderDuel();
+  };
+
+  /* Trafienie: punkty dla gracza przy stole i kolejka idzie dalej. */
+  LU.duelHit = function (points) {
+    if (!LU.duel.enabled) return;
+    LU.duel.players[LU.duel.current].score += points;
+    LU.duel.current = 1 - LU.duel.current;
+    LU.renderDuel();
+  };
+
+  /* Pudło: kolejka idzie dalej, bez punktów. */
+  LU.duelMiss = function () {
+    if (!LU.duel.enabled) return;
+    LU.duel.current = 1 - LU.duel.current;
+    LU.renderDuel();
+  };
+
+  LU.duelLeader = function () {
+    var p = LU.duel.players;
+    if (p[0].score === p[1].score) return "Remis — " + p[0].score + " do " + p[1].score + ".";
+    var win = p[0].score > p[1].score ? p[0] : p[1];
+    var lose = p[0].score > p[1].score ? p[1] : p[0];
+    return "Prowadzi " + win.name + " — " + win.score + " do " + lose.score + ".";
+  };
+
+  LU.renderDuel = function () {
+    $$("[data-duel]").forEach(function (host) {
+      host.hidden = !LU.duel.enabled;
+      if (!LU.duel.enabled) { host.innerHTML = ""; return; }
+      host.innerHTML = "";
+      host.className = host.className.indexOf("panel") >= 0 ? host.className : "duelbar";
+      var row = LU.el("div", { class: "players" });
+      LU.duel.players.forEach(function (pl, i) {
+        row.appendChild(LU.el("div", { class: "player" + (i === LU.duel.current ? " active" : "") }, [
+          LU.el("b", { text: pl.name }),
+          LU.el("span", { class: "mono", text: pl.score + " pkt" })
+        ]));
+      });
+      host.appendChild(row);
+      host.appendChild(LU.el("p", {
+        class: "small muted", style: "margin:.5rem 0 0",
+        text: "Kolejka: " + LU.duel.players[LU.duel.current].name +
+          ". Trafienie daje punkty i oddaje kolejkę, pudło oddaje kolejkę bez punktów."
+      }));
+    });
+  };
+
   LU.BADGES = [
     { id: "first-tally", icon: "✏️", label: "Pierwsza kreska" },
     { id: "trained", icon: "📐", label: "Model wytrenowany ręcznie" },
@@ -45,7 +112,11 @@ window.LU = window.LU || {};
     { id: "words25", icon: "📜", label: "25 wygenerowanych słów" },
     { id: "haiku", icon: "🌸", label: "Haiku wygenerowane" },
     { id: "trigram", icon: "🧠", label: "Tekst z trigramu" },
-    { id: "labrat", icon: "🧪", label: "Wizyta w laboratorium" }
+    { id: "labrat", icon: "🧪", label: "Wizyta w laboratorium" },
+    { id: "judge", icon: "⚖️", label: "Trzy rundy w jury RLHF" },
+    { id: "relay", icon: "♻️", label: "Sztafeta do końca łańcucha" },
+    { id: "toolcall", icon: "🛠️", label: "Trzy wywołania narzędzia" },
+    { id: "printer", icon: "🖨️", label: "Model wydrukowany na papier" }
   ];
 
   /* --- zapis lokalny --- */
@@ -125,6 +196,7 @@ window.LU = window.LU || {};
     });
     if (name === "gen" && LU.Gen) LU.Gen.onEnter();
     if (name === "lab" && LU.Lab) { LU.Lab.onEnter(); LU.award("labrat"); }
+    if (name === "shop") LU.shopEnter();
     if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -176,6 +248,23 @@ window.LU = window.LU || {};
     });
   }
 
+  LU.shopCurrent = "rlhf";
+
+  LU.setShop = function (name) {
+    LU.shopCurrent = name;
+    $$(".shop").forEach(function (el) { el.hidden = el.id !== "shop-" + name; });
+    $$("[data-shop]").forEach(function (b) {
+      b.setAttribute("aria-selected", b.dataset.shop === name ? "true" : "false");
+    });
+    LU.shopEnter();
+  };
+
+  LU.shopEnter = function () {
+    if (!LU.state.model || !LU.state.trainedFully) LU.autoTrain();
+    var mod = { rlhf: LU.Rlhf, relay: LU.Relay, agent: LU.Agent }[LU.shopCurrent];
+    if (mod && mod.onEnter) mod.onEnter();
+  };
+
   LU.boot = function () {
     load();
     $("#hud-score").textContent = LU.state.score;
@@ -201,11 +290,30 @@ window.LU = window.LU || {};
       LU.setView("gen");
     });
 
+    $("#mode-solo").addEventListener("click", function () { LU.duelSetEnabled(false); });
+    $("#mode-duo").addEventListener("click", function () { LU.duelSetEnabled(true); });
+    $("#duel-reset").addEventListener("click", LU.duelReset);
+    $("#p1-name").addEventListener("input", function () {
+      LU.duel.players[0].name = this.value.trim() || "Gracz 1"; LU.renderDuel();
+    });
+    $("#p2-name").addEventListener("input", function () {
+      LU.duel.players[1].name = this.value.trim() || "Gracz 2"; LU.renderDuel();
+    });
+    LU.duelSetEnabled(false);
+
+    $$("[data-shop]").forEach(function (b) {
+      b.addEventListener("click", function () { LU.setShop(b.dataset.shop); });
+    });
+
     LU.Train.init();
     LU.Gen.init();
     LU.Lab.init();
+    LU.Print.init();
+    LU.Rlhf.init();
+    LU.Relay.init();
+    LU.Agent.init();
 
     var initial = location.hash.slice(1);
-    LU.setView(["start", "train", "gen", "lab", "rules"].indexOf(initial) >= 0 ? initial : "start");
+    LU.setView(["start", "train", "gen", "lab", "shop", "rules"].indexOf(initial) >= 0 ? initial : "start");
   };
 })(window.LU);

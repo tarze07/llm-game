@@ -290,3 +290,58 @@ footer.site a { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Podzakładki warsztatów ---------- */
+.subtabs { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .8rem; }
+.subtabs button {
+  font: inherit; font-size: .9rem; cursor: pointer; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-soft); padding: .35rem .8rem;
+}
+.subtabs button:hover { border-color: var(--accent); color: var(--accent); }
+.subtabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---------- Pojedynek dwóch graczy ---------- */
+.duelbar { margin-bottom: .8rem; }
+.players { display: flex; gap: .6rem; flex-wrap: wrap; }
+.player {
+  flex: 1 1 140px; display: flex; justify-content: space-between; align-items: baseline; gap: .6rem;
+  border: 1px solid var(--line); border-radius: 11px; padding: .45rem .7rem; background: var(--panel-2);
+}
+.player.active { border-color: var(--accent); background: var(--accent-soft); }
+.player.active b { color: var(--accent); }
+
+/* ---------- RLHF ---------- */
+.cand { border: 1px solid var(--line); }
+.cand.best { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.cand.worst { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+
+/* ---------- Agent ---------- */
+.tool-sample {
+  background: color-mix(in srgb, var(--amber) 32%, transparent);
+  border-radius: 5px; padding: 0 .18rem; text-decoration: underline dotted var(--amber); text-underline-offset: 3px;
+}
+
+/* ---------- Wydruk ---------- */
+#print-area { display: none; }
+.print-scroll { overflow-x: auto; }
+table.print-grid { border-collapse: collapse; font-size: 9pt; font-family: var(--mono); }
+table.print-grid th, table.print-grid td { border: 1px solid #555; padding: 2px 4px; min-width: 34px; height: 26px; text-align: center; }
+table.print-grid tbody th { text-align: right; }
+table.print-grid th.corner { font-size: 7pt; font-weight: 400; }
+.booklet { columns: 2; column-gap: 1.4rem; }
+.booklet .entry { break-inside: avoid; margin-bottom: .5rem; font-size: 10pt; }
+.booklet .entry b { font-family: var(--mono); }
+.booklet .entry-lines { padding-left: .8rem; }
+.booklet .range { font-family: var(--mono); display: inline-block; min-width: 88px; }
+.print-text { font-family: var(--mono); word-spacing: .2rem; }
+
+@media print {
+  body { background: #fff; color: #000; }
+  header.site, main, footer.site, #toast { display: none !important; }
+  #print-area { display: block; padding: 0; }
+  #print-area h1 { font-size: 16pt; margin-bottom: .2rem; }
+  #print-area .print-head p { color: #333; }
+  .booklet { columns: 3; }
+  a { color: #000; text-decoration: none; }
+  @page { margin: 12mm; }
+}

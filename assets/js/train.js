@@ -117,7 +117,8 @@ window.LU = window.LU || {};
 
   function prompt() {
     if (T.done) {
-      msg("Gotowe! Twój model ma " + T.model.vocab.length + " słów w słowniku i " + T.model.pairs + " policzonych par.", "ok");
+      msg("Gotowe! Twój model ma " + T.model.vocab.length + " słów w słowniku i " + T.model.pairs +
+        " policzonych par." + (LU.duel.enabled ? " " + LU.duelLeader() : ""), "ok");
       $("#train-to-gen").hidden = false;
       return;
     }
@@ -152,7 +153,9 @@ window.LU = window.LU || {};
       T.mistakes = 0;
       T.hint = false;
       LU.bumpStreak();
-      LU.addScore(10 + Math.min(10, LU.state.streak));
+      var points = 10 + Math.min(10, LU.state.streak);
+      LU.addScore(points);
+      LU.duelHit(points);
       LU.award("first-tally");
       if (T.i >= pairCount()) finish(true);
       renderStrip(); renderGrid(); progress(); prompt();
@@ -161,6 +164,7 @@ window.LU = window.LU || {};
     } else {
       T.mistakes++;
       LU.setStreak(0);
+      LU.duelMiss();
       td.classList.add("flash-bad");
       setTimeout(function () { td.classList.remove("flash-bad"); }, 450);
       if (T.mistakes >= 2) {
