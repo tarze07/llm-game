@@ -308,11 +308,15 @@ window.LU = window.LU || {};
   };
 
   LU.boot = function () {
+    var version = (document.getElementById("build-version") || {}).textContent || "?";
+    console.info("Kostka i Kartka — wersja " + version + ". Jeśli coś nie działa, odśwież z Ctrl+Shift+R.");
     load();
     var savedTheme = "auto";
     try { savedTheme = localStorage.getItem("kostka-motyw") || "auto"; } catch (e) { /* brak dostępu */ }
     LU.setTheme(savedTheme, true);
-    $("#theme-toggle").addEventListener("click", cycleTheme);
+    var themeBtn = $("#theme-toggle");
+    if (themeBtn) themeBtn.addEventListener("click", cycleTheme);
+    else console.warn("Kostka i Kartka: brak przycisku motywu w HTML — prawdopodobnie stara wersja strony w pamięci podręcznej.");
     if (window.matchMedia) {
       var mq = window.matchMedia("(prefers-color-scheme: dark)");
       var onSystemChange = function () { if (LU.state.theme === "auto") redrawCanvases(); };
@@ -357,15 +361,18 @@ window.LU = window.LU || {};
       b.addEventListener("click", function () { LU.setShop(b.dataset.shop); });
     });
 
-    LU.Train.init();
-    LU.Gen.init();
-    LU.Lab.init();
-    LU.Print.init();
-    LU.Rlhf.init();
-    LU.Relay.init();
-    LU.Agent.init();
-    LU.Vectors.init();
-    LU.Transformer.init();
+    /* Każdy moduł inicjujemy osobno: brakujący albo przestarzały plik (np. z pamięci
+       podręcznej przeglądarki) nie może wtedy wyłączyć całej reszty strony. */
+    [["Train", LU.Train], ["Gen", LU.Gen], ["Lab", LU.Lab], ["Print", LU.Print],
+     ["Rlhf", LU.Rlhf], ["Relay", LU.Relay], ["Agent", LU.Agent],
+     ["Vectors", LU.Vectors], ["Transformer", LU.Transformer]].forEach(function (pair) {
+      if (!pair[1] || typeof pair[1].init !== "function") {
+        console.warn("Kostka i Kartka: brak modułu " + pair[0] + " — odśwież stronę z pominięciem pamięci podręcznej (Ctrl+Shift+R).");
+        return;
+      }
+      try { pair[1].init(); }
+      catch (e) { console.error("Kostka i Kartka: moduł " + pair[0] + " nie wystartował:", e); }
+    });
 
     var initial = location.hash.slice(1);
     LU.setView(["start", "train", "gen", "lab", "shop", "vec", "tx", "rules"].indexOf(initial) >= 0 ? initial : "start");
