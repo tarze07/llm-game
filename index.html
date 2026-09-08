@@ -19,6 +19,7 @@
       <button role="tab" data-view="gen" aria-selected="false">2. Generowanie</button>
       <button role="tab" data-view="lab" aria-selected="false">Laboratorium</button>
       <button role="tab" data-view="shop" aria-selected="false">Warsztaty</button>
+      <button role="tab" data-view="vec" aria-selected="false">Wektory</button>
       <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
     </nav>
     <div class="scorebar">
@@ -434,6 +435,152 @@
   </div>
 </section>
 
+<!-- ============================ WEKTORY ============================ -->
+<section class="view" id="view-vec" hidden>
+  <div class="panel">
+    <h2>Wektory: osadzenia, uczenie i uwaga <span class="sub">— tu kończy się papier, a zaczyna prawdziwy LLM</span></h2>
+    <p class="small muted">
+      Model z kartki pamięta słowa jako <em>osobne</em> pozycje w siatce: „kot” i „kotem” to dla niego dwa
+      niepowiązane wiersze. Prawdziwe modele językowe zamieniają każde słowo na <strong>wektor</strong> —
+      listę liczb — i uczą te liczby tak, żeby słowa używane w podobnym otoczeniu wylądowały blisko siebie.
+      Poniżej robimy dokładnie to na twoim tekście treningowym: kodujemy słowa, uczymy wektory na oczach
+      i porównujemy je, a na koniec puszczamy przez uproszczoną warstwę uwagi z transformera.
+      Cała matematyka liczy się w przeglądarce, od zera.
+    </p>
+  </div>
+
+  <!-- 1. KODOWANIE -->
+  <div class="panel">
+    <h3>1. Kodowanie: ze słowa w liczby</h3>
+    <p class="small muted">
+      Najpierw tekst dzielimy na tokeny (to już znasz z treningu), każdemu tokenowi dajemy numer w słowniku,
+      a numerowi — wektor. Na starcie wektor to same losowe liczby; nauka dopiero nada im sens.
+    </p>
+    <div class="settings">
+      <label class="field">Słowo
+        <select id="vec-word"></select>
+      </label>
+      <label class="field">Liczba wymiarów
+        <select id="vec-dim">
+          <option value="2">2 — widać bez rzutowania</option>
+          <option value="8" selected>8 — kompromis</option>
+          <option value="16">16 — bliżej prawdy</option>
+        </select>
+      </label>
+      <label class="field">Okno kontekstu
+        <select id="vec-window">
+          <option value="1">1 słowo w bok</option>
+          <option value="2" selected>2 słowa w bok</option>
+          <option value="3">3 słowa w bok</option>
+        </select>
+      </label>
+    </div>
+    <div id="vec-encoding" style="margin-top:.9rem"></div>
+    <p class="small muted" style="margin:.7rem 0 0">
+      Prawdziwe modele mają setki tysięcy tokenów w słowniku i wektory po kilka tysięcy liczb.
+      Skala inna, pomysł ten sam.
+    </p>
+  </div>
+
+  <!-- 2. NAUKA -->
+  <div class="panel">
+    <h3>2. Nauka: wektory rozjeżdżają się i grupują</h3>
+    <p class="small muted">
+      Uczymy metodą <strong>skip-gram z próbkowaniem negatywnym</strong>: bierzemy parę (słowo, jego sąsiad)
+      i przyciągamy ich wektory do siebie, a przy okazji odpychamy kilka losowych słów, które sąsiadami nie były.
+      Powtórz to kilkadziesiąt tysięcy razy, a słowa z podobnego otoczenia same zbiorą się w grupki.
+      To jest cały „trening” — miliardy takich mikro-poprawek.
+    </p>
+    <div class="btnrow">
+      <button class="btn primary" id="vec-play">▶ Ucz</button>
+      <button class="btn" id="vec-fast">Doucz do końca</button>
+      <button class="btn" id="vec-reset">Od nowa (losowe wektory)</button>
+      <label class="field" style="margin-left:.4rem">Tempo
+        <select id="vec-speed">
+          <option value="40">wolno — widać każdy krok</option>
+          <option value="120" selected>normalnie</option>
+          <option value="600">szybko</option>
+        </select>
+      </label>
+    </div>
+    <div class="grid2" style="margin-top:.9rem">
+      <div>
+        <canvas id="vec-canvas" height="380" aria-label="Mapa wektorów słów"></canvas>
+        <p class="small muted" style="margin:.5rem 0 0" id="vec-canvas-note"></p>
+      </div>
+      <div>
+        <div class="statgrid" id="vec-stats"></div>
+        <h4 style="margin:.9rem 0 .3rem">Strata (im niżej, tym lepiej model przewiduje sąsiadów)</h4>
+        <canvas id="vec-loss" height="110" aria-label="Wykres straty"></canvas>
+        <p class="small muted" style="margin:.5rem 0 0">
+          Strata mówi, jak bardzo model myli się w zadaniu „czy te dwa słowa stały obok siebie?”.
+          Spada — znaczy, że wektory zaczynają cokolwiek kodować.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PORÓWNYWANIE -->
+  <div class="panel">
+    <h3>3. Porównywanie wektorów: kosinus zamiast słownika</h3>
+    <p class="small muted">
+      Podobieństwo dwóch słów to <strong>kosinus kąta</strong> między ich wektorami: 1 = ten sam kierunek,
+      0 = brak związku, −1 = kierunki przeciwne. Model nigdzie nie ma zapisane, że „mały” i „mała” są spokrewnione —
+      to wychodzi samo z liczb.
+    </p>
+    <div class="grid2">
+      <div>
+        <h4>Najbliżsi sąsiedzi</h4>
+        <div id="vec-neighbours"></div>
+      </div>
+      <div>
+        <h4>Kalkulator analogii</h4>
+        <p class="small muted">„<span id="an-a-label">a</span> ma się do <span id="an-b-label">b</span> tak jak <span id="an-c-label">c</span> do…?” — czyli wektor b − a + c.</p>
+        <div class="btnrow">
+          <select id="an-a"></select>
+          <select id="an-b"></select>
+          <select id="an-c"></select>
+          <button class="btn" id="an-go">Policz</button>
+        </div>
+        <div id="vec-analogy" style="margin-top:.7rem"></div>
+      </div>
+    </div>
+    <h4 style="margin-top:1rem">Mapa podobieństw</h4>
+    <p class="small muted">Kosinus każdego z każdym dla najczęstszych słów. Ciemniejszy błękit = bliżej, rdzawy = kierunki przeciwne.</p>
+    <div class="heatwrap"><div id="vec-heat"></div></div>
+  </div>
+
+  <!-- 4. UWAGA -->
+  <div class="panel">
+    <h3>4. Uwaga: jak transformer patrzy na resztę zdania</h3>
+    <p class="small muted">
+      Bigram widzi jedno słowo wstecz, trigram dwa. Transformer patrzy na całe zdanie naraz i sam decyduje,
+      które słowa są teraz ważne — licząc podobieństwo wektorów, przepuszczając je przez softmax i mieszając
+      wektory w takich proporcjach. To jest cała <em>uwaga</em>, w wersji jednogłowicowej i bez wyuczonych
+      macierzy Q/K/V (u nas Q = K = V = wektory słów).
+    </p>
+    <div class="settings">
+      <label class="field">Zdanie z tekstu
+        <select id="att-sentence"></select>
+      </label>
+      <label class="field">Maska przyczynowa
+        <select id="att-causal">
+          <option value="yes" selected>tak — wolno patrzeć tylko wstecz (jak przy generowaniu)</option>
+          <option value="no">nie — całe zdanie naraz (jak przy analizie)</option>
+        </select>
+      </label>
+      <label class="field">Kodowanie pozycji
+        <select id="att-pos">
+          <option value="no" selected>bez pozycji — liczy się tylko znaczenie</option>
+          <option value="yes">sinus/cosinus — model wie, które słowo jest które</option>
+        </select>
+      </label>
+    </div>
+    <div id="att-matrix" style="margin-top:.9rem"></div>
+    <div id="att-detail" style="margin-top:.9rem"></div>
+  </div>
+</section>
+
 <!-- ============================ ZASADY ============================ -->
 <section class="view" id="view-rules" hidden>
   <div class="panel rules">
@@ -517,6 +664,26 @@
       osoba obok). Odpowiedź wchodzi do tekstu, a model pisze dalej od tego znaku interpunkcyjnego, bo na słowa znajomego
       nie ma w siatce żadnego wiersza. To cała różnica między modelem a agentem: pętla generuj → wywołaj narzędzie → wklej wynik → generuj dalej.</p>
 
+    <h3>Wektory (osadzenia, uczenie, uwaga)</h3>
+    <p>
+      Zakładka <strong>Wektory</strong> wychodzi poza model z kartki i pokazuje, co robią prawdziwe LLM-y:
+    </p>
+    <ol>
+      <li><strong>Kodowanie</strong> — token dostaje numer w słowniku, a numer wektor liczb (na starcie losowych).</li>
+      <li><strong>Nauka</strong> — algorytm skip-gram z próbkowaniem negatywnym: parę (słowo, sąsiad) przyciągamy do siebie,
+        a kilka losowych słów odpychamy. Mapa na żywo pokazuje, jak wektory się przegrupowują, a wykres — jak spada strata.
+        Przy więcej niż dwóch wymiarach mapa to rzut PCA.</li>
+      <li><strong>Porównywanie</strong> — kosinus kąta między wektorami: najbliżsi sąsiedzi, kalkulator analogii (b − a + c)
+        i mapa podobieństw każdego z każdym.</li>
+      <li><strong>Uwaga</strong> — uproszczona warstwa transformera: podobieństwa wektorów w zdaniu przechodzą przez softmax
+        i dają wagi, w jakich model miesza wektory. Można włączyć maskę przyczynową (wolno patrzeć tylko wstecz)
+        i kodowanie pozycji sinus/cosinus.</li>
+    </ol>
+    <p class="small muted">
+      To jest uproszczenie: prawdziwy transformer ma wyuczone macierze Q/K/V, wiele głowic, wiele warstw i sieć MLP po drodze.
+      Zachowana jest jednak cała logika: słowa jako wektory, uczenie przez poprawianie tych wektorów, uwaga jako ważona mieszanka.
+    </p>
+
     <h3>Utknąłeś?</h3>
     <ul>
       <li><strong>Brak następników</strong> — trafiłeś na słowo, które w tekście wystąpiło tylko na końcu. Wybierz nowe słowo startowe.</li>
@@ -553,6 +720,8 @@
 <script src="assets/js/rlhf.js"></script>
 <script src="assets/js/relay.js"></script>
 <script src="assets/js/agent.js"></script>
+<script src="assets/js/vec-engine.js"></script>
+<script src="assets/js/vectors.js"></script>
 <script>LU.boot();</script>
 </body>
 </html>

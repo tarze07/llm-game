@@ -17,6 +17,7 @@ na serwer.
 | **2. Generowanie** | Generation, Sampling, More Context | wybierasz słowo startowe, rzucasz kostką i sam odczytujesz, w czyj zakres oczek trafiłeś; do tego temperatura, strategie obcinania i przełącznik bigram/trigram |
 | **Laboratorium** | Sampling, More Context, Sycophancy | porównanie bigramu z trigramem na tym samym tekście, podgląd rozkładów przy czterech temperaturach, dolewanie „danych przypochlebnych” do zbioru treningowego |
 | **Warsztaty** | RLHF, Synthetic Data, Agentic AI | teleturniej RLHF (ocena trzech propozycji, aktualizacja ±1 z podłogą 0, runda o reward hackingu), sztafeta danych syntetycznych z tablicą zubożenia słownika i trybem Jokera, agent zatrzymujący się na interpunkcji, żeby wywołać narzędzie |
+| **Wektory** | poza materiałem źródłowym — most do prawdziwych LLM | kodowanie słów w liczby, nauka osadzeń skip-gram na żywo (mapa PCA + wykres straty), porównywanie wektorów kosinusem (sąsiedzi, analogie, mapa podobieństw) i uproszczona warstwa uwagi z maską przyczynową oraz kodowaniem pozycji |
 | **Zasady** | — | pełny opis algorytmu po polsku plus sekcja „utknąłeś?” |
 
 Do tego: **tryb dwóch graczy** (trening i generowanie na zmianę — trafienie daje punkty i oddaje kolejkę,
@@ -34,6 +35,11 @@ Mechaniki wzięte wprost z materiałów źródłowych:
 - RLHF: +1 dla przejść z propozycji preferowanej, −1 dla odrzuconej, licznik nigdy poniżej zera (wyzerowany wpis znika z modelu), środkowa propozycja bez zmian;
 - dane syntetyczne: każde ogniwo sztafety trenuje wyłącznie na tekście poprzednika, a tablica liczy różne słowa na wejściu i wyjściu każdego pokolenia;
 - agent: wyzwalaczem narzędzia jest znak interpunkcyjny, wynik narzędzia wchodzi do tekstu w całości, a generowanie wraca do tego znaku, nie do słów narzędzia.
+
+Zakładka Wektory wychodzi poza materiały źródłowe i pokazuje mechanizmy prawdziwych LLM-ów, też liczone od zera
+w przeglądarce: skip-gram z próbkowaniem negatywnym (SGD, malejący współczynnik uczenia), rzut PCA metodą potęgową
+ze stabilizacją znaku osi między klatkami, kosinusowe podobieństwo i analogie wektorowe oraz jednogłowicowa uwaga
+(Q = K = V = wektory słów) z maską przyczynową i sinusoidalnym kodowaniem pozycji.
 
 ## Uruchomienie
 

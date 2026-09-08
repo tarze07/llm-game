@@ -345,3 +345,27 @@ table.print-grid th.corner { font-size: 7pt; font-weight: 400; }
   a { color: #000; text-decoration: none; }
   @page { margin: 12mm; }
 }
+
+/* ---------- Wektory ---------- */
+canvas#vec-canvas, canvas#vec-loss {
+  display: block; width: 100%; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.pipeline { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+.pipe-step {
+  display: flex; flex-direction: column; gap: .3rem; align-items: flex-start;
+  border: 1px solid var(--line); border-radius: 11px; padding: .5rem .7rem; background: var(--panel-2);
+}
+.pipe-arrow { color: var(--ink-soft); font-size: 1.2rem; }
+.vecstrip { display: flex; gap: 2px; flex-wrap: wrap; }
+.vecstrip .cell {
+  width: 16px; height: 22px; border-radius: 3px; border: 1px solid var(--line); display: block;
+}
+.heatwrap { overflow-x: auto; }
+table.heat { border-collapse: collapse; font-family: var(--mono); font-size: .74rem; }
+table.heat th, table.heat td { border: 1px solid var(--line); padding: .18rem .3rem; text-align: center; min-width: 34px; }
+table.heat th { background: var(--panel-2); font-weight: 700; white-space: nowrap; }
+table.heat tr > th:first-child { text-align: right; position: sticky; left: 0; z-index: 2; }
+table.heat th.corner { font-size: .62rem; font-weight: 400; color: var(--ink-soft); }
+table.heat thead th span, table.heat tr:first-child th span { display: inline-block; }
+table.heat.att td { min-width: 40px; }
