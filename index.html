@@ -23,6 +23,9 @@
       <button role="tab" data-view="tx" aria-selected="false">Transformer</button>
       <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
     </nav>
+    <button class="btn theme-btn" id="theme-toggle" type="button" title="Przełącz motyw: automatyczny / jasny / ciemny">
+      <span class="ico" id="theme-ico">🌗</span><span class="lbl" id="theme-lbl">auto</span>
+    </button>
     <div class="scorebar">
       <span>punkty <strong id="hud-score">0</strong></span>
       <span>seria <strong id="hud-streak">0</strong></span>
@@ -852,6 +855,14 @@
     <p class="small muted">
       Czego tu nie ma w porównaniu z prawdziwym modelem: wielu warstw, wielu głowic, normalizacji warstw,
       dropoutu, tokenizacji podsłownej i miliardów słów treningowych. Schemat pojedynczego kroku jest natomiast ten sam.
+    </p>
+
+    <h3>Jasne i ciemne tło</h3>
+    <p>
+      Przycisk w prawym górnym rogu przełącza motyw w kółko: <strong>auto</strong> (zgodnie z ustawieniami
+      systemu), <strong>jasny</strong> i <strong>ciemny</strong>. Wybór zapisuje się w przeglądarce, więc
+      przy następnej wizycie strona otworzy się tak samo. Wykresy i mapy rysowane na kanwie odrysowują się
+      po każdej zmianie, a wydruki zawsze wychodzą na białym tle.
     </p>
 
     <h3>Utknąłeś?</h3>

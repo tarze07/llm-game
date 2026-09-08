@@ -21,7 +21,8 @@ na serwer.
 | **Transformer** | poza materiałem źródłowym | mały transformer dekoderowy uczony na żywo (wykres straty, zakłopotanie), generowanie słowo po słowie z softmaxu z temperaturą i top-k, porównanie rozkładu sieci z rozkładem bigramu, wagi uwagi i jeden krok rozłożony na wektory |
 | **Zasady** | — | pełny opis algorytmu po polsku plus sekcja „utknąłeś?” |
 
-Do tego: **tryb dwóch graczy** (trening i generowanie na zmianę — trafienie daje punkty i oddaje kolejkę,
+Do tego: **przełącznik motywu** w nagłówku (auto zgodnie z systemem / jasny / ciemny, z zapisem wyboru
+w przeglądarce i odrysowaniem wykresów na kanwie), **tryb dwóch graczy** (trening i generowanie na zmianę — trafienie daje punkty i oddaje kolejkę,
 pudło oddaje kolejkę bez punktów) oraz **wydruki**: pusta siatka do ołówka, wypełniona siatka z kreskami
 i książeczka modelu z gotowymi zakresami oczek.
 

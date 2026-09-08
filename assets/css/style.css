@@ -1,7 +1,7 @@
 /* Kostka i Kartka — styl strony */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f6f4ee;
   --bg-grid: rgba(20, 40, 80, 0.05);
   --panel: #fffdf7;
@@ -20,8 +20,10 @@
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* Motyw ciemny: automatycznie z ustawień systemu, chyba że użytkownik wybrał jasny... */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #14161c;
     --bg-grid: rgba(180, 200, 255, 0.05);
     --panel: #1c1f27;
@@ -38,6 +40,28 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
   }
 }
+
+/* ...oraz zawsze, gdy użytkownik wybrał ciemny ręcznie. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161c;
+    --bg-grid: rgba(180, 200, 255, 0.05);
+    --panel: #1c1f27;
+    --panel-2: #232733;
+    --ink: #e8e8ea;
+    --ink-soft: #a3aab8;
+    --line: #343a48;
+    --accent: #9aa9ff;
+    --accent-soft: #262c46;
+    --hot: #ff9666;
+    --good: #57d6ab;
+    --bad: #ff8a8a;
+    --amber: #f0c04a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+/* Wybór jasnego trzyma jasną paletę niezależnie od ustawień systemu. */
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -72,22 +96,22 @@ header.site {
   backdrop-filter: blur(8px);
   position: sticky; top: 0; z-index: 40;
 }
-.site-row { display: flex; align-items: center; gap: 1rem; padding: .6rem 0; flex-wrap: wrap; }
+.site-row { display: flex; align-items: center; gap: .7rem; padding: .6rem 0; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.06rem; }
 .brand .die {
   width: 30px; height: 30px; display: grid; place-items: center;
   background: var(--accent); color: #fff; border-radius: 9px; font-family: var(--mono);
   font-size: .95rem; transform: rotate(-6deg);
 }
-nav.tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin-left: auto; }
+nav.tabs { display: flex; gap: .2rem; flex-wrap: wrap; margin-left: auto; }
 nav.tabs button {
-  font: inherit; font-size: .92rem; border: 1px solid transparent; background: none; color: var(--ink-soft);
-  padding: .38rem .7rem; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: .86rem; border: 1px solid transparent; background: none; color: var(--ink-soft);
+  padding: .32rem .58rem; border-radius: 999px; cursor: pointer; white-space: nowrap;
 }
 nav.tabs button:hover { background: var(--panel-2); color: var(--ink); }
 nav.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.scorebar { display: flex; gap: .9rem; align-items: center; font-family: var(--mono); font-size: .85rem; color: var(--ink-soft); }
+.scorebar { display: flex; gap: .7rem; align-items: center; font-family: var(--mono); font-size: .8rem; color: var(--ink-soft); }
 .scorebar strong { color: var(--ink); font-size: 1rem; }
 
 /* ---------- Ogólne elementy ---------- */
@@ -383,3 +407,12 @@ canvas#tx-loss {
 }
 .atttok b { font-family: var(--mono); font-size: .82rem; }
 .atttok i { font-style: normal; font-size: .7rem; color: var(--ink-soft); font-family: var(--mono); }
+
+/* ---------- Przełącznik motywu ---------- */
+.theme-btn {
+  font-size: .85rem; padding: .3rem .6rem; gap: .3rem; white-space: nowrap;
+}
+.theme-btn .ico { font-size: .95rem; line-height: 1; }
+@media (max-width: 560px) {
+  .theme-btn .lbl { display: none; }
+}

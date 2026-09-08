@@ -34,7 +34,8 @@ window.LU = window.LU || {};
     streak: 0,
     bestStreak: 0,
     correctRolls: 0,
-    badges: {}
+    badges: {},
+    theme: "auto"
   };
 
   /* --- Pojedynek: tryb dwóch graczy (trening i generowanie na zmianę) --- */
@@ -120,6 +121,41 @@ window.LU = window.LU || {};
     { id: "vectors", icon: "🧭", label: "Wektory i uwaga obejrzane" },
     { id: "neuron", icon: "🤖", label: "Transformer wytrenowany" }
   ];
+
+  /* --- Motyw: automatyczny (z systemu), jasny albo ciemny --- */
+  var THEMES = [
+    { id: "auto", icon: "🌗", label: "auto", title: "Motyw zgodny z ustawieniami systemu" },
+    { id: "light", icon: "☀️", label: "jasny", title: "Zawsze jasne tło" },
+    { id: "dark", icon: "🌙", label: "ciemny", title: "Zawsze ciemne tło" }
+  ];
+
+  LU.setTheme = function (id, quiet) {
+    var theme = THEMES.filter(function (t) { return t.id === id; })[0] || THEMES[0];
+    LU.state.theme = theme.id;
+    if (theme.id === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", theme.id);
+
+    var btn = $("#theme-toggle");
+    if (btn) {
+      $("#theme-ico").textContent = theme.icon;
+      $("#theme-lbl").textContent = theme.label;
+      btn.title = theme.title + " (kliknij, żeby zmienić)";
+    }
+    try { localStorage.setItem("kostka-motyw", theme.id); } catch (e) { /* tryb prywatny */ }
+    if (!quiet) LU.toast("Motyw: " + theme.label);
+    redrawCanvases();
+  };
+
+  /* Wykresy rysujemy na kanwie kolorami z CSS, więc po zmianie motywu trzeba je odrysować. */
+  function redrawCanvases() {
+    if (LU.Vectors && !$("#view-vec").hidden && LU.Vectors.trainer) LU.Vectors.onEnter();
+    if (LU.Transformer && !$("#view-tx").hidden && LU.Transformer.model) LU.Transformer.onEnter();
+  }
+
+  function cycleTheme() {
+    var i = THEMES.map(function (t) { return t.id; }).indexOf(LU.state.theme || "auto");
+    LU.setTheme(THEMES[(i + 1) % THEMES.length].id);
+  }
 
   /* --- zapis lokalny --- */
   function save() {
@@ -273,6 +309,16 @@ window.LU = window.LU || {};
 
   LU.boot = function () {
     load();
+    var savedTheme = "auto";
+    try { savedTheme = localStorage.getItem("kostka-motyw") || "auto"; } catch (e) { /* brak dostępu */ }
+    LU.setTheme(savedTheme, true);
+    $("#theme-toggle").addEventListener("click", cycleTheme);
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      var onSystemChange = function () { if (LU.state.theme === "auto") redrawCanvases(); };
+      if (mq.addEventListener) mq.addEventListener("change", onSystemChange);
+      else if (mq.addListener) mq.addListener(onSystemChange);
+    }
     $("#hud-score").textContent = LU.state.score;
     $("#hud-streak").textContent = LU.state.streak;
     LU.renderBadges();
