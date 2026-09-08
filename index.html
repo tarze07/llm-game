@@ -20,6 +20,7 @@
       <button role="tab" data-view="lab" aria-selected="false">Laboratorium</button>
       <button role="tab" data-view="shop" aria-selected="false">Warsztaty</button>
       <button role="tab" data-view="vec" aria-selected="false">Wektory</button>
+      <button role="tab" data-view="tx" aria-selected="false">Transformer</button>
       <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
     </nav>
     <div class="scorebar">
@@ -581,6 +582,153 @@
   </div>
 </section>
 
+<!-- ============================ TRANSFORMER ============================ -->
+<section class="view" id="view-tx" hidden>
+  <div class="panel">
+    <h2>Transformer: generowanie z sieci neuronowej <span class="sub">— ten sam tekst, zupełnie inna maszyna</span></h2>
+    <p class="small muted">
+      W zakładce Generowanie następne słowo bierze się z <em>policzonych kresek</em>: model pamięta, co po czym
+      wystąpiło, i losuje z tych liczników. Tutaj następne słowo bierze się z <strong>sieci neuronowej</strong>:
+      mały transformer dekoderowy (osadzenia + kodowanie pozycji, jedna głowica uwagi z maską przyczynową,
+      połączenia rezydualne, sieć FFN, wagi wyjścia wiązane z osadzeniami) uczy się przewidywać następny token,
+      a rozkład prawdopodobieństw wychodzi z softmaxu. Uczenie i propagacja wsteczna liczą się w twojej
+      przeglądarce, bez żadnej biblioteki — możesz obejrzeć każdy krok.
+    </p>
+  </div>
+
+  <!-- 1. UCZENIE -->
+  <div class="panel">
+    <h3>1. Uczenie sieci</h3>
+    <p class="small muted">
+      Model dostaje kawałki tekstu i za każdym razem ma zgadnąć następny token. Pomyłka to strata,
+      propagacja wsteczna liczy, jak poprawić każdą z tysięcy liczb, a optymalizator Adam robi krok.
+      Powtarzamy setki razy — i z chaosu robi się model, który zna twój tekst.
+    </p>
+    <div class="settings">
+      <label class="field">Wymiar modelu
+        <select id="tx-dim">
+          <option value="8">8 — mały i szybki</option>
+          <option value="16" selected>16 — domyślny</option>
+          <option value="24">24 — wolniejszy, lepszy</option>
+        </select>
+      </label>
+      <label class="field">Długość kontekstu
+        <select id="tx-ctx">
+          <option value="4">4 tokeny</option>
+          <option value="8" selected>8 tokenów</option>
+          <option value="12">12 tokenów</option>
+        </select>
+      </label>
+      <label class="field">Tempo uczenia (lr)
+        <select id="tx-lr">
+          <option value="0.01">0,01 — ostrożnie</option>
+          <option value="0.03" selected>0,03 — domyślnie</option>
+          <option value="0.06">0,06 — szybko i ryzykownie</option>
+        </select>
+      </label>
+      <label class="field">Cel
+        <select id="tx-target">
+          <option value="200">200 kroków</option>
+          <option value="500" selected>500 kroków</option>
+          <option value="1000">1000 kroków</option>
+        </select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn primary" id="tx-play">▶ Ucz</button>
+      <button class="btn" id="tx-reset">Od nowa (losowe wagi)</button>
+      <span class="small muted" id="tx-note"></span>
+    </div>
+    <div class="grid2" style="margin-top:.9rem">
+      <div>
+        <div class="statgrid" id="tx-stats"></div>
+        <div class="progress" style="margin-top:.7rem"><div id="tx-progress"></div></div>
+      </div>
+      <div>
+        <canvas id="tx-loss" height="150" aria-label="Wykres straty uczenia"></canvas>
+        <p class="small muted" style="margin:.5rem 0 0">
+          Strata to −log prawdopodobieństwa, jakie model dał prawdziwemu następnemu słowu.
+          Zakłopotanie (perplexity) mówi to samo prościej: „między iloma słowami model się waha”.
+          1,0 znaczy, że jest pewny — na tak krótkim tekście oznacza to po prostu, że nauczył się go na pamięć.
+          Skoki na wykresie są normalne: optymalizator czasem przestrzeli i musi się pozbierać.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. GENEROWANIE -->
+  <div class="panel">
+    <h3>2. Generowanie słowo po słowie</h3>
+    <p class="small muted">
+      Uwaga: na tekście długości kilkudziesięciu słów sieć po prostu uczy się go na pamięć i przy niskiej
+      temperaturze będzie go recytować. Podkręć temperaturę albo przerwij uczenie w połowie, jeśli chcesz
+      zobaczyć model, który jeszcze się waha. To ta sama zależność, co przy prawdziwych LLM-ach:
+      mało danych plus dużo parametrów równa się zapamiętywanie zamiast uogólniania.
+    </p>
+    <div class="settings">
+      <label class="field">Temperatura
+        <select id="tx-temp">
+          <option value="0.3">0,3 — zachowawczo</option>
+          <option value="0.8" selected>0,8 — normalnie</option>
+          <option value="1.2">1,2 — na luzie</option>
+          <option value="2">2,0 — szaleństwo</option>
+        </select>
+      </label>
+      <label class="field">Top-k
+        <select id="tx-topk">
+          <option value="0" selected>bez ograniczeń</option>
+          <option value="3">3 najlepsze</option>
+          <option value="5">5 najlepszych</option>
+        </select>
+      </label>
+      <label class="field">Prompt (słowo startowe)
+        <select id="tx-seed"></select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn primary" id="tx-step">Następne słowo →</button>
+      <button class="btn" id="tx-auto">Pisz dalej ▶</button>
+      <button class="btn" id="tx-back">Cofnij słowo</button>
+      <button class="btn" id="tx-clear">Od promptu</button>
+    </div>
+    <div class="output" id="tx-output" style="margin-top:.8rem"></div>
+    <p class="small mono muted" style="margin:.5rem 0 0" id="tx-outstats"></p>
+  </div>
+
+  <!-- 3. ROZKŁAD -->
+  <div class="panel">
+    <h3>3. Co model sądzi o następnym słowie</h3>
+    <div class="grid2">
+      <div>
+        <h4>Transformer (softmax sieci)</h4>
+        <div id="tx-dist"></div>
+      </div>
+      <div>
+        <h4>Model z kartki (liczniki bigramu)</h4>
+        <div id="tx-bigram"></div>
+      </div>
+    </div>
+    <p class="small muted" style="margin:.7rem 0 0">
+      Bigram patrzy wyłącznie na ostatnie słowo i zna tylko te następniki, które widział tuż po nim.
+      Transformer patrzy na cały kontekst i przypisuje niezerowe prawdopodobieństwo <em>każdemu</em> słowu
+      ze słownika — także takiemu, które nigdy po tym słowie nie stało.
+    </p>
+  </div>
+
+  <!-- 4. UWAGA W TYM KROKU -->
+  <div class="panel">
+    <h3>4. Na co model patrzył, wybierając to słowo</h3>
+    <div id="tx-attention"></div>
+  </div>
+
+  <!-- 5. POD MASKĄ -->
+  <div class="panel">
+    <h3>5. Jeden krok rozłożony na części</h3>
+    <p class="small muted">Wszystkie liczby poniżej dotyczą ostatniej pozycji kontekstu — tej, z której powstaje następne słowo.</p>
+    <div id="tx-inside"></div>
+  </div>
+</section>
+
 <!-- ============================ ZASADY ============================ -->
 <section class="view" id="view-rules" hidden>
   <div class="panel rules">
@@ -684,6 +832,28 @@
       Zachowana jest jednak cała logika: słowa jako wektory, uczenie przez poprawianie tych wektorów, uwaga jako ważona mieszanka.
     </p>
 
+    <h3>Transformer (sieć neuronowa)</h3>
+    <p>
+      Ostatnia zakładka zamienia model z kartki na prawdziwą, choć malutką, sieć neuronową i pokazuje,
+      czym różni się generowanie z liczników od generowania z softmaxu.
+    </p>
+    <ul>
+      <li><strong>Architektura</strong>: osadzenia z sinusoidalnym kodowaniem pozycji → jedna głowica uwagi
+        z maską przyczynową → połączenie rezydualne → sieć FFN z ReLU → drugie połączenie rezydualne →
+        mnożenie przez macierz osadzeń (wiązanie wag) → softmax. Około 2,5 tysiąca liczb przy domyślnych ustawieniach.</li>
+      <li><strong>Uczenie</strong>: model dostaje kawałki tekstu i zgaduje następny token; strata to −log
+        prawdopodobieństwa prawdziwego słowa. Propagacja wsteczna i optymalizator Adam napisane od zera,
+        uczenie rozłożone na klatki animacji, żeby strona nie zamarzała.</li>
+      <li><strong>Generowanie</strong>: rozkład następnego słowa wychodzi z softmaxu, z temperaturą i top-k;
+        obok pokazujemy dla porównania rozkład bigramu z policzonych kresek.</li>
+      <li><strong>Podgląd</strong>: wagi uwagi ostatniej pozycji, pełna macierz uwagi oraz jeden krok rozłożony
+        na wektory (wejście, q, k, v, kontekst, rezydualne, wyjście FFN).</li>
+    </ul>
+    <p class="small muted">
+      Czego tu nie ma w porównaniu z prawdziwym modelem: wielu warstw, wielu głowic, normalizacji warstw,
+      dropoutu, tokenizacji podsłownej i miliardów słów treningowych. Schemat pojedynczego kroku jest natomiast ten sam.
+    </p>
+
     <h3>Utknąłeś?</h3>
     <ul>
       <li><strong>Brak następników</strong> — trafiłeś na słowo, które w tekście wystąpiło tylko na końcu. Wybierz nowe słowo startowe.</li>
@@ -722,6 +892,8 @@
 <script src="assets/js/agent.js"></script>
 <script src="assets/js/vec-engine.js"></script>
 <script src="assets/js/vectors.js"></script>
+<script src="assets/js/tx-engine.js"></script>
+<script src="assets/js/transformer.js"></script>
 <script>LU.boot();</script>
 </body>
 </html>

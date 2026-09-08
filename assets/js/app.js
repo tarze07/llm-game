@@ -117,7 +117,8 @@ window.LU = window.LU || {};
     { id: "relay", icon: "♻️", label: "Sztafeta do końca łańcucha" },
     { id: "toolcall", icon: "🛠️", label: "Trzy wywołania narzędzia" },
     { id: "printer", icon: "🖨️", label: "Model wydrukowany na papier" },
-    { id: "vectors", icon: "🧭", label: "Wektory i uwaga obejrzane" }
+    { id: "vectors", icon: "🧭", label: "Wektory i uwaga obejrzane" },
+    { id: "neuron", icon: "🤖", label: "Transformer wytrenowany" }
   ];
 
   /* --- zapis lokalny --- */
@@ -200,6 +201,8 @@ window.LU = window.LU || {};
     if (name === "shop") LU.shopEnter();
     if (name === "vec" && LU.Vectors) { LU.Vectors.onEnter(); LU.award("vectors"); }
     if (name !== "vec" && LU.Vectors) LU.Vectors.onLeave();
+    if (name === "tx" && LU.Transformer) LU.Transformer.onEnter();
+    if (name !== "tx" && LU.Transformer) LU.Transformer.onLeave();
     if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -316,8 +319,9 @@ window.LU = window.LU || {};
     LU.Relay.init();
     LU.Agent.init();
     LU.Vectors.init();
+    LU.Transformer.init();
 
     var initial = location.hash.slice(1);
-    LU.setView(["start", "train", "gen", "lab", "shop", "vec", "rules"].indexOf(initial) >= 0 ? initial : "start");
+    LU.setView(["start", "train", "gen", "lab", "shop", "vec", "tx", "rules"].indexOf(initial) >= 0 ? initial : "start");
   };
 })(window.LU);
