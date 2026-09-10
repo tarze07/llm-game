@@ -6,7 +6,7 @@
 <title>Kostka i Kartka — zbuduj model językowy własnymi rękami</title>
 <meta name="description" content="Gra przeglądarkowa oparta na LLMs Unplugged: wytrenuj model bigramowy zliczając pary słów w siatce, a potem generuj nowy tekst rzutami kostką d10.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233f4ea8'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='monospace'>d</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css?v=2026-09-08a">
+<link rel="stylesheet" href="assets/css/style.css?v=2026-09-10b">
 </head>
 <body>
 
@@ -724,11 +724,30 @@
     <div id="tx-attention"></div>
   </div>
 
-  <!-- 5. POD MASKĄ -->
+  <!-- 5. SYMULACJA KROKU -->
   <div class="panel">
-    <h3>5. Jeden krok rozłożony na części</h3>
-    <p class="small muted">Wszystkie liczby poniżej dotyczą ostatniej pozycji kontekstu — tej, z której powstaje następne słowo.</p>
-    <div id="tx-inside"></div>
+    <h3>5. Symulacja: jeden krok sieci, liczba po liczbie</h3>
+    <p class="small muted">
+      Osiem etapów, przez które przechodzi wybrana pozycja kontekstu, zanim sieć wskaże następne słowo.
+      Wszystkie liczby są prawdziwe — pochodzą z modelu, który przed chwilą wytrenowałeś, i zmieniają się
+      wraz z każdym kolejnym krokiem uczenia i każdym dopisanym słowem.
+    </p>
+    <div class="settings">
+      <label class="field">Analizowana pozycja
+        <select id="tx-pos"></select>
+      </label>
+      <label class="field">Podświetlony wymiar wektora
+        <select id="tx-dimsel"></select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn" id="tx-prev">◀ Poprzedni</button>
+      <button class="btn primary" id="tx-next">Następny etap ▶</button>
+      <button class="btn" id="tx-playsteps">Odtwórz wszystkie ▶</button>
+      <span class="small mono muted" id="tx-stepname"></span>
+    </div>
+    <ol class="steptrack" id="tx-steptrack"></ol>
+    <div id="tx-stage" class="stage"></div>
   </div>
 </section>
 
@@ -849,8 +868,13 @@
         uczenie rozłożone na klatki animacji, żeby strona nie zamarzała.</li>
       <li><strong>Generowanie</strong>: rozkład następnego słowa wychodzi z softmaxu, z temperaturą i top-k;
         obok pokazujemy dla porównania rozkład bigramu z policzonych kresek.</li>
-      <li><strong>Podgląd</strong>: wagi uwagi ostatniej pozycji, pełna macierz uwagi oraz jeden krok rozłożony
-        na wektory (wejście, q, k, v, kontekst, rezydualne, wyjście FFN).</li>
+      <li><strong>Podgląd</strong>: wagi uwagi ostatniej pozycji i pełna macierz uwagi kontekstu.</li>
+      <li><strong>Symulacja krok po kroku</strong>: osiem etapów jednego przejścia sieci, każdy z prawdziwymi
+        liczbami z twojego modelu — osadzenie tokenu, dodanie pozycji, projekcje q/k/v z rozpisanym iloczynem
+        skalarnym i podglądem macierzy wag, iloczyny q·k z maską przyczynową, softmax z wykładnikami i sumą wag,
+        mieszanie wektorów wartości, połączenia rezydualne z siecią FFN (widać, ile neuronów przeszło przez ReLU)
+        oraz logity i rozkład następnego słowa. Można wybrać analizowaną pozycję kontekstu, podświetlić dowolny
+        wymiar wektora albo puścić wszystkie etapy jeden po drugim.</li>
     </ul>
     <p class="small muted">
       Czego tu nie ma w porównaniu z prawdziwym modelem: wielu warstw, wielu głowic, normalizacji warstw,
@@ -888,24 +912,24 @@
   <div class="wrap">
     Kostka i Kartka — gra na podstawie <a href="https://www.llmsunplugged.org/" target="_blank" rel="noopener">LLMs Unplugged</a>
     (ANU School of Cybernetics / Ben Swift). Wszystko liczy się lokalnie w twojej przeglądarce, nic nie jest wysyłane na serwer.
-    <span class="mono small" style="display:block;margin-top:.4rem">wersja <span id="build-version">2026-09-08a</span></span>
+    <span class="mono small" style="display:block;margin-top:.4rem">wersja <span id="build-version">2026-09-10b</span></span>
   </div>
 </footer>
 
-<script src="assets/js/texts.js?v=2026-09-08a"></script>
-<script src="assets/js/lm.js?v=2026-09-08a"></script>
-<script src="assets/js/app.js?v=2026-09-08a"></script>
-<script src="assets/js/train.js?v=2026-09-08a"></script>
-<script src="assets/js/generate.js?v=2026-09-08a"></script>
-<script src="assets/js/lab.js?v=2026-09-08a"></script>
-<script src="assets/js/print.js?v=2026-09-08a"></script>
-<script src="assets/js/rlhf.js?v=2026-09-08a"></script>
-<script src="assets/js/relay.js?v=2026-09-08a"></script>
-<script src="assets/js/agent.js?v=2026-09-08a"></script>
-<script src="assets/js/vec-engine.js?v=2026-09-08a"></script>
-<script src="assets/js/vectors.js?v=2026-09-08a"></script>
-<script src="assets/js/tx-engine.js?v=2026-09-08a"></script>
-<script src="assets/js/transformer.js?v=2026-09-08a"></script>
+<script src="assets/js/texts.js?v=2026-09-10b"></script>
+<script src="assets/js/lm.js?v=2026-09-10b"></script>
+<script src="assets/js/app.js?v=2026-09-10b"></script>
+<script src="assets/js/train.js?v=2026-09-10b"></script>
+<script src="assets/js/generate.js?v=2026-09-10b"></script>
+<script src="assets/js/lab.js?v=2026-09-10b"></script>
+<script src="assets/js/print.js?v=2026-09-10b"></script>
+<script src="assets/js/rlhf.js?v=2026-09-10b"></script>
+<script src="assets/js/relay.js?v=2026-09-10b"></script>
+<script src="assets/js/agent.js?v=2026-09-10b"></script>
+<script src="assets/js/vec-engine.js?v=2026-09-10b"></script>
+<script src="assets/js/vectors.js?v=2026-09-10b"></script>
+<script src="assets/js/tx-engine.js?v=2026-09-10b"></script>
+<script src="assets/js/transformer.js?v=2026-09-10b"></script>
 <script>LU.boot();</script>
 </body>
 </html>

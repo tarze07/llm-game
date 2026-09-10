@@ -14,7 +14,11 @@ window.LU = window.LU || {};
     seedIds: [],
     ids: [],          // pełny wygenerowany ciąg (z promptem)
     fresh: -1,
-    lastDist: null
+    lastDist: null,
+    stepIndex: 0,
+    stepTimer: null,
+    posLocked: false,
+    posLabels: null
   };
 
   function css(name) {
@@ -59,6 +63,8 @@ window.LU = window.LU || {};
   }
 
   function resetOutput() {
+    X.posLocked = false;
+    X.posLabels = null;
     var seed = $("#tx-seed").value || X.data.vocab[0];
     X.seedIds = [X.data.index.get(seed)];
     X.ids = X.seedIds.slice();
@@ -159,6 +165,7 @@ window.LU = window.LU || {};
   }
 
   function stop() {
+    stopStepPlayer();
     X.running = false;
     if (X.raf) cancelAnimationFrame(X.raf);
     X.raf = null;
@@ -284,7 +291,7 @@ window.LU = window.LU || {};
     }
 
     renderAttention(dist);
-    renderInside(dist);
+    renderSimulation();
   }
 
   function renderAttention(dist) {
@@ -354,41 +361,374 @@ window.LU = window.LU || {};
     ]);
   }
 
-  function renderInside(dist) {
-    var host = $("#tx-inside");
-    host.innerHTML = "";
-    var c = dist.cache, i = dist.position;
-    var m = X.model;
+  /* ---------- 5. symulacja kroku po kroku ---------- */
 
-    var row = el("div", { class: "pipeline wrap" }, [
-      vecStrip(c.h0[i], "wejście: osadzenie + pozycja", "słowo zamienione w liczby"),
-      el("div", { class: "pipe-arrow", text: "→" }),
-      vecStrip(c.q[i], "zapytanie q", "czego szukam?"),
-      vecStrip(c.k[i], "klucz k", "co oferuję?"),
-      vecStrip(c.v[i], "wartość v", "co przekazuję?"),
-      el("div", { class: "pipe-arrow", text: "→" }),
-      vecStrip(c.ctx[i], "kontekst c", "mieszanka v wg wag uwagi"),
-      el("div", { class: "pipe-arrow", text: "→" }),
-      vecStrip(c.z[i], "z = wejście + uwaga", "połączenie rezydualne"),
-      el("div", { class: "pipe-arrow", text: "→" }),
-      vecStrip(c.u[i], "u = z + FFN(z)", "wektor gotowy do odczytu")
+  var STEPS = [
+    { name: "1. Token → osadzenie", fn: stepEmbedding },
+    { name: "2. Dodanie pozycji", fn: stepPosition },
+    { name: "3. Zapytanie, klucz, wartość", fn: stepQKV },
+    { name: "4. Podobieństwa i maska", fn: stepScores },
+    { name: "5. Softmax → wagi uwagi", fn: stepSoftmax },
+    { name: "6. Mieszanie wartości", fn: stepMix },
+    { name: "7. Rezydualne i sieć FFN", fn: stepFFN },
+    { name: "8. Logity i wybór słowa", fn: stepLogits }
+  ];
+
+  function num(v, digits) { return v.toFixed(digits === undefined ? 3 : digits); }
+
+  /* Liczba jako czynnik iloczynu: ujemne w nawiasie, żeby „0.30·-0.43” nie myliło oka. */
+  function factor(v, digits) {
+    var t = num(v, digits === undefined ? 2 : digits);
+    return v < 0 ? "(" + t.replace("-", "−") + ")" : t;
+  }
+
+  /* Wiersz: etykieta, pasek kolorów i kilka pierwszych liczb. */
+  function vecRow(label, vec, opts) {
+    opts = opts || {};
+    var max = 0, i;
+    for (i = 0; i < vec.length; i++) max = Math.max(max, Math.abs(vec[i]));
+    max = max || 1;
+    var strip = el("div", { class: "vecstrip" });
+    for (i = 0; i < vec.length; i++) {
+      var v = vec[i] / max;
+      strip.appendChild(el("span", {
+        class: "cell" + (i === opts.highlight ? " hl" : ""),
+        title: "wymiar " + i + ": " + num(vec[i], 4),
+        style: "background:" + (v >= 0
+          ? "color-mix(in srgb, var(--accent) " + Math.round(Math.abs(v) * 85) + "%, transparent)"
+          : "color-mix(in srgb, var(--hot) " + Math.round(Math.abs(v) * 85) + "%, transparent)")
+      }));
+    }
+    return el("div", { class: "vecrow" + (opts.strong ? " strong" : "") }, [
+      el("span", { class: "vecrow-label", text: label }),
+      strip,
+      el("span", { class: "vecrow-num mono", text: opts.highlight !== undefined
+        ? "[" + opts.highlight + "] = " + num(vec[opts.highlight], 3)
+        : num(vec[0], 2) + " …" })
     ]);
-    host.appendChild(row);
+  }
 
-    var top = dist.list.slice(0, 5).map(function (r) {
-      return r.word + " " + (r.p * 100).toFixed(1) + "%";
-    }).join("   ");
-    host.appendChild(el("p", { class: "small muted", style: "margin:.8rem 0 .3rem" }, [
-      "Na końcu mnożymy wektor u przez macierz osadzeń (te same wagi, co na wejściu — stąd „wiązanie wag”), " +
-      "dostajemy po jednej liczbie na każde słowo ze słownika (logity), a softmax zamienia je w prawdopodobieństwa:"
-    ]));
-    host.appendChild(el("p", { class: "mono small", style: "margin:0", text: top }));
+  function formula(html) {
+    return el("p", { class: "formula mono", html: html });
+  }
 
-    host.appendChild(el("p", { class: "small muted", style: "margin:.8rem 0 0" }, [
-      "To wszystko: " + m.params.toLocaleString("pl-PL") + " liczb, jedna warstwa i jedna głowica. " +
-      "Prawdziwy model ma tych warstw kilkadziesiąt, głowic kilkanaście na warstwę i miliardy liczb — " +
-      "ale schemat kroku jest dokładnie ten sam."
+  function note(text) {
+    return el("p", { class: "small muted", style: "margin:.6rem 0 0", text: text });
+  }
+
+  /* Mała mapa macierzy wag z podświetlonym wierszem. */
+  function matrixMini(W, rows, cols, highlightRow, label) {
+    var max = 0, i;
+    for (i = 0; i < W.length; i++) max = Math.max(max, Math.abs(W[i]));
+    max = max || 1;
+    var grid = el("div", { class: "matmini", style: "grid-template-columns:repeat(" + cols + ", 1fr)" });
+    for (var r = 0; r < rows; r++) {
+      for (var c2 = 0; c2 < cols; c2++) {
+        var v = W[r * cols + c2] / max;
+        grid.appendChild(el("span", {
+          class: "mcell" + (r === highlightRow ? " hl" : ""),
+          title: label + "[" + r + "," + c2 + "] = " + num(W[r * cols + c2], 4),
+          style: "background:" + (v >= 0
+            ? "color-mix(in srgb, var(--accent) " + Math.round(Math.abs(v) * 90) + "%, transparent)"
+            : "color-mix(in srgb, var(--hot) " + Math.round(Math.abs(v) * 90) + "%, transparent)")
+        }));
+      }
+    }
+    return el("div", { class: "pipe-step", style: "align-items:stretch" }, [
+      el("span", { class: "tag", text: label + " (" + rows + "×" + cols + ")" }),
+      grid
+    ]);
+  }
+
+  /* Rozpisanie iloczynu skalarnego na składniki: pokazujemy kilka pierwszych. */
+  function dotBreakdown(rowLabel, W, rowIndex, x, dim, resultLabel) {
+    var terms = [], sum = 0;
+    for (var i = 0; i < dim; i++) {
+      var w = W[rowIndex * dim + i];
+      sum += w * x[i];
+      if (i < 4) terms.push(factor(w) + "·" + factor(x[i]));
+    }
+    var more = dim > 4 ? " + … (" + (dim - 4) + " dalszych składników)" : "";
+    return formula("<strong>" + resultLabel + "</strong> = " + rowLabel + " · wejście = " +
+      terms.join(" + ") + more + " = <strong>" + num(sum, 3) + "</strong>");
+  }
+
+  function stepEmbedding(host, S) {
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Model nie widzi liter. Widzi numer tokenu w słowniku, a pod tym numerem " +
+      "leży wiersz macierzy osadzeń — kilkanaście liczb, które uczą się razem z resztą sieci."
     ]));
+    host.appendChild(el("div", { class: "pipeline" }, [
+      el("div", { class: "pipe-step" }, [el("span", { class: "tag", text: "token" }), el("b", { class: "mono", text: S.word })]),
+      el("div", { class: "pipe-arrow", text: "→" }),
+      el("div", { class: "pipe-step" }, [el("span", { class: "tag", text: "numer w słowniku" }),
+        el("b", { class: "mono", text: "#" + S.id + " z " + S.m.vocabSize })]),
+      el("div", { class: "pipe-arrow", text: "→" }),
+      el("div", { class: "pipe-step" }, [el("span", { class: "tag", text: "wiersz macierzy E" }),
+        el("b", { class: "mono", text: S.m.dim + " liczb" })])
+    ]));
+    host.appendChild(vecRow("E[" + S.word + "]", S.c.emb[S.pos], { highlight: S.dimIdx, strong: true }));
+    host.appendChild(formula("E[" + S.word + "] = [" +
+      Array.prototype.slice.call(S.c.emb[S.pos], 0, 6).map(function (v) { return num(v, 2); }).join(", ") +
+      (S.m.dim > 6 ? ", …" : "") + "]"));
+    host.appendChild(note("Na starcie te liczby są losowe. Po uczeniu słowa używane podobnie mają podobne wiersze — dokładnie to oglądasz w zakładce Wektory."));
+  }
+
+  function stepPosition(host, S) {
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Uwaga patrzy na wszystkie pozycje naraz i sama z siebie nie wie, która była pierwsza. " +
+      "Dlatego do osadzenia dodajemy wektor pozycji z sinusów i cosinusów o różnych częstotliwościach."
+    ]));
+    host.appendChild(vecRow("osadzenie słowa", S.c.emb[S.pos], { highlight: S.dimIdx }));
+    host.appendChild(vecRow("pozycja nr " + S.pos, S.c.pos[S.pos], { highlight: S.dimIdx }));
+    host.appendChild(vecRow("suma = wejście warstwy", S.c.h0[S.pos], { highlight: S.dimIdx, strong: true }));
+    var d = S.dimIdx;
+    host.appendChild(formula("wejście[" + d + "] = " + num(S.c.emb[S.pos][d], 3) + " + " +
+      num(S.c.pos[S.pos][d], 3) + " = <strong>" + num(S.c.h0[S.pos][d], 3) + "</strong>"));
+    host.appendChild(note("Bez tego kroku „kot pije mleko” i „mleko pije kot” byłyby dla sieci tym samym zbiorem wektorów."));
+  }
+
+  function stepQKV(host, S) {
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Z jednego wektora wejściowego robimy trzy: zapytanie (czego szukam), klucz (co oferuję) " +
+      "i wartość (co przekazuję dalej). Każdy powstaje przez pomnożenie przez wyuczoną macierz."
+    ]));
+    host.appendChild(el("div", { class: "pipeline wrap" }, [
+      matrixMini(S.m.Wq, S.m.dim, S.m.dim, S.dimIdx, "Wq"),
+      matrixMini(S.m.Wk, S.m.dim, S.m.dim, S.dimIdx, "Wk"),
+      matrixMini(S.m.Wv, S.m.dim, S.m.dim, S.dimIdx, "Wv")
+    ]));
+    host.appendChild(vecRow("q — zapytanie", S.c.q[S.pos], { highlight: S.dimIdx }));
+    host.appendChild(vecRow("k — klucz", S.c.k[S.pos], { highlight: S.dimIdx }));
+    host.appendChild(vecRow("v — wartość", S.c.v[S.pos], { highlight: S.dimIdx }));
+    host.appendChild(dotBreakdown("wiersz " + S.dimIdx + " macierzy Wq", S.m.Wq, S.dimIdx, S.c.h0[S.pos], S.m.dim, "q[" + S.dimIdx + "]"));
+    host.appendChild(note("Podświetlony wiersz macierzy odpowiada wybranemu wymiarowi wyjścia. Zmień wymiar w liście powyżej, żeby zobaczyć inny."));
+  }
+
+  function stepScores(host, S) {
+    var scale = Math.sqrt(S.m.dim);
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Zapytanie bieżącej pozycji mnożymy skalarnie przez klucz każdej pozycji. " +
+      "Wynik dzielimy przez pierwiastek z wymiaru, żeby liczby nie rosły wraz z rozmiarem modelu."
+    ]));
+    var table = el("table", { class: "simple compact" });
+    table.appendChild(el("tr", {}, [
+      el("th", { text: "pozycja" }), el("th", { text: "token" }),
+      el("th", { text: "q · k" }), el("th", { text: "÷ √" + S.m.dim }), el("th", { text: "stan" })
+    ]));
+    S.words.forEach(function (w, j) {
+      var allowed = j <= S.pos;
+      var raw = allowed ? S.c.scores[S.pos][j] * scale : null;
+      table.appendChild(el("tr", { class: allowed ? "" : "masked" }, [
+        el("td", { class: "mono", text: String(j) }),
+        el("td", { class: "mono", text: w }),
+        el("td", { class: "mono", text: allowed ? num(raw, 2) : "—" }),
+        el("td", { class: "mono", text: allowed ? num(S.c.scores[S.pos][j], 2) : "—" }),
+        el("td", { class: "small", text: allowed ? "widoczne" : "zasłonięte maską (to przyszłość)" })
+      ]));
+    });
+    host.appendChild(table);
+    host.appendChild(note("Maska przyczynowa jest powodem, dla którego model piszący tekst nie może podejrzeć dalszego ciągu — przy uczeniu widziałby wtedy odpowiedź."));
+  }
+
+  function stepSoftmax(host, S) {
+    var sc = S.c.scores[S.pos], att = S.c.att[S.pos];
+    var max = -Infinity, j;
+    for (j = 0; j < sc.length; j++) max = Math.max(max, sc[j]);
+    var exps = [], sum = 0;
+    for (j = 0; j < sc.length; j++) { var e2 = Math.exp(sc[j] - max); exps.push(e2); sum += e2; }
+
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Softmax zamienia dowolne liczby w rozkład: podnosimy e do potęgi każdej z nich " +
+      "(po odjęciu największej, żeby nie przepełnić liczb) i dzielimy przez sumę. Wagi zawsze dają w sumie 100%."
+    ]));
+    var table = el("table", { class: "simple compact" });
+    table.appendChild(el("tr", {}, [
+      el("th", { text: "token" }), el("th", { text: "wynik" }),
+      el("th", { text: "e^(wynik − max)" }), el("th", { text: "waga" }), el("th", { text: "" })
+    ]));
+    for (j = 0; j < sc.length; j++) {
+      table.appendChild(el("tr", {}, [
+        el("td", { class: "mono", text: S.words[j] }),
+        el("td", { class: "mono", text: num(sc[j], 2) }),
+        el("td", { class: "mono", text: num(exps[j], 3) }),
+        el("td", { class: "mono", text: (att[j] * 100).toFixed(1) + "%" }),
+        el("td", {}, [el("div", { class: "bartrack" }, [
+          el("div", { class: "bar", style: "width:" + Math.max(2, Math.round(att[j] * 100)) + "%" })
+        ])])
+      ]));
+    }
+    host.appendChild(table);
+    host.appendChild(formula("suma wykładników = " + num(sum, 3) +
+      " · suma wag = " + (att.reduce(function (a, b) { return a + b; }, 0) * 100).toFixed(1) + "%"));
+  }
+
+  function stepMix(host, S) {
+    var att = S.c.att[S.pos], d = S.dimIdx;
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Wagi mówią, w jakich proporcjach zmieszać wektory wartości. To jest cała uwaga: " +
+      "ważona średnia tego, co niosą pozostałe pozycje."
+    ]));
+    for (var j = 0; j < att.length; j++) {
+      host.appendChild(vecRow(S.words[j] + " · " + (att[j] * 100).toFixed(0) + "%", S.c.v[j], { highlight: d }));
+    }
+    host.appendChild(vecRow("wynik: kontekst c", S.c.ctx[S.pos], { highlight: d, strong: true }));
+    var order = [];
+    for (var j3 = 0; j3 < att.length; j3++) order.push(j3);
+    order.sort(function (a, b) { return att[b] - att[a]; });      // najpierw to, co waży najwięcej
+    var terms = order.slice(0, 4).map(function (j4) {
+      return factor(att[j4]) + "·" + factor(S.c.v[j4][d]) + " <span class=\"muted\">(" + S.words[j4] + ")</span>";
+    });
+    host.appendChild(formula("c[" + d + "] = " + terms.join(" + ") +
+      (att.length > 4 ? " + …" : "") + " = <strong>" + num(S.c.ctx[S.pos][d], 3) + "</strong>"));
+    host.appendChild(note("Składniki uszeregowane od największej wagi. Pozycje z wagą bliską zeru prawie nic nie wnoszą — i o to chodzi: uwaga wybiera, czego słuchać."));
+  }
+
+  function stepFFN(host, S) {
+    var d = S.dimIdx;
+    var active = 0, pre = S.c.pre[S.pos];
+    for (var i = 0; i < pre.length; i++) if (pre[i] > 0) active++;
+
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Wynik uwagi przepuszczamy przez macierz Wo i dodajemy do wejścia — to połączenie rezydualne, " +
+      "dzięki któremu pierwotna informacja o słowie nie ginie. Potem to samo robi mała sieć FFN."
+    ]));
+    host.appendChild(vecRow("wejście warstwy", S.c.h0[S.pos], { highlight: d }));
+    host.appendChild(vecRow("Wo · c (wyjście uwagi)", S.c.attOut[S.pos], { highlight: d }));
+    host.appendChild(vecRow("z = wejście + uwaga", S.c.z[S.pos], { highlight: d, strong: true }));
+    host.appendChild(formula("z[" + d + "] = " + num(S.c.h0[S.pos][d], 3) + " + " +
+      num(S.c.attOut[S.pos][d], 3) + " = <strong>" + num(S.c.z[S.pos][d], 3) + "</strong>"));
+
+    host.appendChild(el("h4", { style: "margin:1rem 0 .4rem", text: "Sieć FFN: rozszerz, obetnij ujemne, ściśnij z powrotem" }));
+    host.appendChild(vecRow("po ReLU (" + S.m.hidden + " neuronów)", S.c.relu[S.pos], {}));
+    host.appendChild(vecRow("FFN(z)", S.c.ffn[S.pos], { highlight: d }));
+    host.appendChild(vecRow("u = z + FFN(z)", S.c.u[S.pos], { highlight: d, strong: true }));
+    host.appendChild(formula("aktywnych neuronów: <strong>" + active + " z " + S.m.hidden +
+      "</strong> — ReLU zeruje resztę, więc każda pozycja korzysta z innego podzbioru sieci"));
+  }
+
+  function stepLogits(host, S) {
+    var logits = S.c.logits[S.pos];
+    var list = [];
+    for (var i = 0; i < logits.length; i++) list.push({ word: S.m.data.vocab[i], logit: logits[i], id: i });
+    list.sort(function (a, b) { return b.logit - a.logit; });
+    var temp = parseFloat($("#tx-temp").value) || 1;
+    var probs = T.softmax(logits, temp);
+
+    host.appendChild(el("p", { class: "small muted", style: "margin:0 0 .7rem" }, [
+      "Gotowy wektor mnożymy przez macierz osadzeń — tę samą, od której zaczynaliśmy. " +
+      "Dla każdego słowa ze słownika wychodzi jedna liczba (logit), a softmax z temperaturą " +
+      temp.toFixed(1) + " zamienia je w prawdopodobieństwa."
+    ]));
+    var table = el("table", { class: "simple compact" });
+    table.appendChild(el("tr", {}, [
+      el("th", { text: "słowo" }), el("th", { text: "logit = u · E[słowo] + b" }),
+      el("th", { text: "prawdopodobieństwo" }), el("th", { text: "" })
+    ]));
+    list.slice(0, 8).forEach(function (r, idx) {
+      var top = idx === 0;
+      table.appendChild(el("tr", { class: top ? "hitrow" : "" }, [
+        el("td", { class: "mono", text: r.word + (top ? "  ← faworyt" : "") }),
+        el("td", { class: "mono", text: num(r.logit, 2) }),
+        el("td", { class: "mono", text: (probs[r.id] * 100).toFixed(1) + "%" }),
+        el("td", {}, [el("div", { class: "bartrack" }, [
+          el("div", { class: "bar", style: "width:" + Math.max(2, Math.round(probs[r.id] * 100)) + "%" })
+        ])])
+      ]));
+    });
+    host.appendChild(table);
+    var best = list[0];
+    host.appendChild(formula("logit(" + best.word + ") = suma " + S.m.dim + " iloczynów u · E[" +
+      best.word + "] + b = <strong>" + num(best.logit, 3) + "</strong>"));
+    host.appendChild(note("To jest rozkład, z którego padnie następne słowo — naciśnij „Następne słowo ▶” w sekcji 2, " +
+      "a model wylosuje z tych prawdopodobieństw (faworyt nie zawsze wygrywa, od tego jest temperatura), " +
+      "dopisze wynik do tekstu i cała ósemka etapów ruszy od nowa. W prawdziwym modelu — przez kilkadziesiąt warstw zamiast jednej."));
+  }
+
+  /* Symulacja zawsze dotyczy bieżącego kontekstu, czyli kroku, który dopiero ma się wydarzyć.
+     Liczymy dla niej własny przebieg w przód — kilkanaście tokenów, koszt pomijalny. */
+  function renderSimulation() {
+    var host = $("#tx-stage");
+    if (!host || !X.model) return;
+    host.innerHTML = "";
+
+    var dist = T.nextDistribution(X.model, X.ids, {
+      temperature: parseFloat($("#tx-temp").value) || 1,
+      topK: parseInt($("#tx-topk").value, 10) || 0
+    });
+    var words = dist.ids.map(function (id) { return X.data.vocab[id]; });
+
+    /* Lista pozycji do analizy. Okno kontekstu przesuwa się z każdym słowem, więc etykiety
+       przebudowujemy zawsze, gdy zmieni się treść; dopóki użytkownik sam nie wybierze pozycji,
+       trzymamy się tej ostatniej — czyli tej, z której powstaje następne słowo. */
+    var posSel = $("#tx-pos");
+    var labels = words.join(" ");
+    if (X.posLabels !== labels) {
+      X.posLabels = labels;
+      var keep = X.posLocked ? posSel.value : null;
+      posSel.innerHTML = "";
+      words.forEach(function (w, i) {
+        posSel.appendChild(el("option", {
+          value: String(i),
+          text: (i + 1) + ". „" + w + "”" + (i === words.length - 1 ? " (ostatnia)" : "")
+        }));
+      });
+      posSel.value = keep !== null && Number(keep) < words.length ? keep : String(words.length - 1);
+    }
+    if (!X.posLocked) posSel.value = String(words.length - 1);
+    var pos = Math.min(parseInt(posSel.value, 10) || 0, words.length - 1);
+
+    var dimSel = $("#tx-dimsel");
+    if (dimSel.options.length !== X.model.dim) {
+      dimSel.innerHTML = "";
+      for (var d = 0; d < X.model.dim; d++) {
+        dimSel.appendChild(el("option", { value: String(d), text: "wymiar " + d }));
+      }
+      dimSel.value = "0";
+    }
+
+    var S = {
+      m: X.model, c: dist.cache, pos: pos, words: words,
+      word: words[pos], id: dist.ids[pos],
+      dimIdx: Math.min(parseInt(dimSel.value, 10) || 0, X.model.dim - 1)
+    };
+
+    // pasek etapów
+    var track = $("#tx-steptrack");
+    track.innerHTML = "";
+    STEPS.forEach(function (st, i) {
+      track.appendChild(el("li", {
+        class: "stepdot" + (i === X.stepIndex ? " active" : "") + (i < X.stepIndex ? " done" : ""),
+        title: st.name,
+        onclick: function () { setStep(i); }
+      }, [String(i + 1)]));
+    });
+    $("#tx-stepname").textContent = STEPS[X.stepIndex].name +
+      "  ·  pozycja „" + S.word + "”";
+
+    STEPS[X.stepIndex].fn(host, S);
+  }
+
+  function setStep(i) {
+    X.stepIndex = Math.max(0, Math.min(STEPS.length - 1, i));
+    renderStep();
+  }
+
+  function stopStepPlayer() {
+    if (X.stepTimer) { clearInterval(X.stepTimer); X.stepTimer = null; }
+    var b = $("#tx-playsteps");
+    if (b) b.textContent = "Odtwórz wszystkie ▶";
+  }
+
+  function toggleStepPlayer() {
+    if (X.stepTimer) { stopStepPlayer(); return; }
+    $("#tx-playsteps").textContent = "Zatrzymaj ■";
+    X.stepIndex = 0;
+    renderStep();
+    X.stepTimer = setInterval(function () {
+      if (X.stepIndex >= STEPS.length - 1) { stopStepPlayer(); return; }
+      setStep(X.stepIndex + 1);
+    }, 2200);
   }
 
   /* ---------- wejście/wyjście zakładki ---------- */
@@ -416,6 +756,14 @@ window.LU = window.LU || {};
       stopAuto(); resetOutput(); renderStep();
     });
     $("#tx-seed").addEventListener("change", function () { stopAuto(); resetOutput(); renderStep(); });
+    $("#tx-prev").addEventListener("click", function () { stopStepPlayer(); setStep(X.stepIndex - 1); });
+    $("#tx-next").addEventListener("click", function () { stopStepPlayer(); setStep(X.stepIndex + 1); });
+    $("#tx-playsteps").addEventListener("click", toggleStepPlayer);
+    $("#tx-pos").addEventListener("change", function () {
+      X.posLocked = true;          // użytkownik wybrał pozycję — nie przeskakujemy już sami
+      stopStepPlayer(); renderStep();
+    });
+    $("#tx-dimsel").addEventListener("change", function () { stopStepPlayer(); renderStep(); });
     ["#tx-temp", "#tx-topk"].forEach(function (sel) {
       $(sel).addEventListener("change", function () { renderStep(); });
     });

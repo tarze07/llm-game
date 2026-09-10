@@ -114,13 +114,17 @@ window.LU = window.LU || {};
   /* --- Przebieg w przód (z pamięcią pośrednich wartości do propagacji wstecznej) --- */
   T.forward = function (m, ids) {
     var dim = m.dim, hid = m.hidden, n = ids.length;
-    var c = { h0: [], q: [], k: [], v: [], att: [], ctx: [], z: [], pre: [], relu: [], u: [], probs: [], logits: [] };
+    var c = { h0: [], emb: [], pos: [], q: [], k: [], v: [], scores: [], att: [], ctx: [],
+      attOut: [], z: [], pre: [], relu: [], ffn: [], u: [], probs: [], logits: [] };
 
     for (var t = 0; t < n; t++) {
       var h = new Float64Array(dim);
+      var emb = new Float64Array(dim);
       var base = ids[t] * dim;
       var pe = m.pos[Math.min(t, m.pos.length - 1)];
-      for (var d = 0; d < dim; d++) h[d] = m.E[base + d] + pe[d];
+      for (var d = 0; d < dim; d++) { emb[d] = m.E[base + d]; h[d] = emb[d] + pe[d]; }
+      c.emb.push(emb);
+      c.pos.push(pe);
       c.h0.push(h);
       c.q.push(matVec(m.Wq, h, dim, dim));
       c.k.push(matVec(m.Wk, h, dim, dim));
@@ -135,6 +139,7 @@ window.LU = window.LU || {};
         for (var d2 = 0; d2 < dim; d2++) s += c.q[i][d2] * c.k[j][d2];
         scores[j] = s / scale;
       }
+      c.scores.push(Float64Array.from(scores));   // wartości przed softmaxem — do podglądu krok po kroku
       var max = -Infinity;
       for (var a = 0; a <= i; a++) max = Math.max(max, scores[a]);
       var sum = 0;
@@ -149,7 +154,9 @@ window.LU = window.LU || {};
       }
       c.ctx.push(ctx);
 
-      var z = matVec(m.Wo, ctx, dim, dim);
+      var attOut = matVec(m.Wo, ctx, dim, dim);
+      c.attOut.push(Float64Array.from(attOut));
+      var z = Float64Array.from(attOut);
       for (var d4 = 0; d4 < dim; d4++) z[d4] += c.h0[i][d4];       // połączenie rezydualne
       c.z.push(z);
 
@@ -159,8 +166,10 @@ window.LU = window.LU || {};
       c.pre.push(pre); c.relu.push(relu);
 
       var f = matVec(m.W2, relu, dim, hid);
+      for (var d6 = 0; d6 < dim; d6++) f[d6] += m.b2[d6];
+      c.ffn.push(Float64Array.from(f));
       var u = new Float64Array(dim);
-      for (var d5 = 0; d5 < dim; d5++) u[d5] = z[d5] + f[d5] + m.b2[d5];
+      for (var d5 = 0; d5 < dim; d5++) u[d5] = z[d5] + f[d5];
       c.u.push(u);
 
       var logits = matVec(m.E, u, m.vocabSize, dim);
@@ -355,6 +364,9 @@ window.LU = window.LU || {};
     }
     return count ? Math.exp(loss / count) : null;
   };
+
+  /* Pomocnicze operacje udostępnione interfejsowi (symulacja krok po kroku). */
+  T.matVec = function (W, x, out, inp) { return matVec(W, x, out, inp); };
 
   LU.Tx = T;
 })(window.LU);

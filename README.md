@@ -18,7 +18,7 @@ na serwer.
 | **Laboratorium** | Sampling, More Context, Sycophancy | porównanie bigramu z trigramem na tym samym tekście, podgląd rozkładów przy czterech temperaturach, dolewanie „danych przypochlebnych” do zbioru treningowego |
 | **Warsztaty** | RLHF, Synthetic Data, Agentic AI | teleturniej RLHF (ocena trzech propozycji, aktualizacja ±1 z podłogą 0, runda o reward hackingu), sztafeta danych syntetycznych z tablicą zubożenia słownika i trybem Jokera, agent zatrzymujący się na interpunkcji, żeby wywołać narzędzie |
 | **Wektory** | poza materiałem źródłowym — most do prawdziwych LLM | kodowanie słów w liczby, nauka osadzeń skip-gram na żywo (mapa PCA + wykres straty), porównywanie wektorów kosinusem (sąsiedzi, analogie, mapa podobieństw) i uproszczona warstwa uwagi z maską przyczynową oraz kodowaniem pozycji |
-| **Transformer** | poza materiałem źródłowym | mały transformer dekoderowy uczony na żywo (wykres straty, zakłopotanie), generowanie słowo po słowie z softmaxu z temperaturą i top-k, porównanie rozkładu sieci z rozkładem bigramu, wagi uwagi i jeden krok rozłożony na wektory |
+| **Transformer** | poza materiałem źródłowym | mały transformer dekoderowy uczony na żywo (wykres straty, zakłopotanie), generowanie słowo po słowie z softmaxu z temperaturą i top-k, porównanie rozkładu sieci z rozkładem bigramu, wagi uwagi oraz ośmioetapowa symulacja jednego przejścia sieci z prawdziwymi liczbami |
 | **Zasady** | — | pełny opis algorytmu po polsku plus sekcja „utknąłeś?” |
 
 Do tego: **przełącznik motywu** w nagłówku (auto zgodnie z systemem / jasny / ciemny, z zapisem wyboru
@@ -47,7 +47,10 @@ Zakładka Transformer idzie o krok dalej: to prawdziwa sieć neuronowa (osadzeni
 głowica uwagi z maską przyczynową, połączenia rezydualne, FFN z ReLU, wiązane wagi wyjścia), uczona metodą
 propagacji wstecznej z optymalizatorem Adam — jedno i drugie napisane ręcznie. Poprawność gradientów sprawdzona
 metodą różnic skończonych (błąd względny rzędu 1e-9). Uczenie idzie w kawałkach po ~25 ms na klatkę animacji,
-więc 500 kroków zajmuje około trzech sekund i nie blokuje strony.
+więc 500 kroków zajmuje około trzech sekund i nie blokuje strony. Sekcja „Symulacja” rozkłada jeden krok sieci
+na osiem etapów (osadzenie, pozycja, q/k/v, iloczyny skalarne z maską, softmax, mieszanie wartości, rezydualne
+i FFN, logity) — z podglądem macierzy wag, rozpisanymi iloczynami skalarnymi, wyborem analizowanej pozycji
+i podświetlaniem pojedynczego wymiaru wektora.
 
 ## Uruchomienie
 
