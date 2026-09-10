@@ -449,3 +449,26 @@ table.simple.compact th, table.simple.compact td { padding: .25rem .45rem; font-
 table.simple.compact tr.masked td { opacity: .5; }
 table.simple.compact tr.hitrow td { background: color-mix(in srgb, var(--good) 20%, transparent); }
 table.simple.compact .bartrack { background: var(--panel-2); border-radius: 999px; min-width: 70px; }
+
+/* ---------- Zakładka Q·K·V ---------- */
+.chain { display: grid; gap: .35rem; }
+.chain-step {
+  display: grid; grid-template-columns: 200px 1fr 62px minmax(0, 1.1fr);
+  gap: .6rem; align-items: center; font-size: .85rem;
+  border-left: 3px solid transparent; padding-left: .5rem;
+}
+.chain-step.target { border-left-color: var(--amber); }
+.chain-label { font-weight: 600; }
+.chain-val { color: var(--ink-soft); text-align: right; }
+@media (max-width: 820px) {
+  .chain-step { grid-template-columns: 1fr 54px; }
+  .chain-label { grid-column: 1 / -1; }
+  .chain-desc { grid-column: 1 / -1; }
+}
+.matbig { display: grid; gap: 1px; }
+.matbig .mcell { width: 100%; aspect-ratio: 1; border-radius: 1px; display: block; }
+.matbig .mcell.hl { outline: 2px solid var(--amber); outline-offset: 1px; }
+canvas#qkv-racechart {
+  display: block; width: 100%; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 12px;
+}

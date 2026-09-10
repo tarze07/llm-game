@@ -191,7 +191,13 @@ window.LU = window.LU || {};
   };
 
   /* --- Propagacja wsteczna dla jednej sekwencji; gradienty dopisywane do G --- */
-  T.backward = function (m, ids, G) {
+  T.backward = function (m, ids, G, stats) {
+    function track(name, arr) {          // suma kwadratów — do pokazania „ile sygnału” dociera na dany etap
+      if (!stats) return;
+      var acc = 0;
+      for (var i = 0; i < arr.length; i++) acc += arr[i] * arr[i];
+      stats[name] = (stats[name] || 0) + acc;
+    }
     var dim = m.dim, hid = m.hidden;
     var n = ids.length - 1;                  // ostatni token to tylko cel
     if (n < 1) return 0;
@@ -215,9 +221,11 @@ window.LU = window.LU || {};
       for (var w = 0; w < m.vocabSize; w++) dlogits[w] = probs[w] / n;
       dlogits[target] -= 1 / n;
 
+      track("dlogits", dlogits);
       addOuter(G.E, dlogits, c.u[i], dim);                        // wagi wiązane
       for (var w2 = 0; w2 < m.vocabSize; w2++) G.bOut[w2] += dlogits[w2];
       var du = matTVec(m.E, dlogits, m.vocabSize, dim);
+      track("du", du);
 
       // FFN
       for (var d0 = 0; d0 < dim; d0++) G.b2[d0] += du[d0];
@@ -229,10 +237,12 @@ window.LU = window.LU || {};
       addOuter(G.W1, dp, c.z[i], dim);
       var dz = matTVec(m.W1, dp, hid, dim);
       for (var d1 = 0; d1 < dim; d1++) dz[d1] += du[d1];           // rezydualne wokół FFN
+      track("dz", dz);
 
       // uwaga
       addOuter(G.Wo, dz, c.ctx[i], dim);
       var dctx = matTVec(m.Wo, dz, dim, dim);
+      track("dctx", dctx);
       for (var d2 = 0; d2 < dim; d2++) dh0[i][d2] += dz[d2];       // rezydualne wokół uwagi
 
       var att = c.att[i];
@@ -245,19 +255,26 @@ window.LU = window.LU || {};
         }
         datt[j] = s;
       }
+      track("datt", datt);
       var dotSum = 0;
       for (var j2 = 0; j2 <= i; j2++) dotSum += att[j2] * datt[j2];
       var scale = Math.sqrt(dim);
+      var dsAll = stats ? new Float64Array(i + 1) : null;
       for (var j3 = 0; j3 <= i; j3++) {
         var ds = att[j3] * (datt[j3] - dotSum) / scale;
+        if (dsAll) dsAll[j3] = ds;
         for (var d4 = 0; d4 < dim; d4++) {
           dq[i][d4] += ds * c.k[j3][d4];
           dk[j3][d4] += ds * c.q[i][d4];
         }
       }
+      if (dsAll) track("dscores", dsAll);
     }
 
     for (var t2 = 0; t2 < n; t2++) {
+      track("dq", dq[t2]);
+      track("dk", dk[t2]);
+      track("dv", dv[t2]);
       addOuter(G.Wq, dq[t2], c.h0[t2], dim);
       addOuter(G.Wk, dk[t2], c.h0[t2], dim);
       addOuter(G.Wv, dv[t2], c.h0[t2], dim);
@@ -283,6 +300,7 @@ window.LU = window.LU || {};
     var b1 = 0.9, b2 = 0.999, eps = 1e-8;
     var c1 = 1 - Math.pow(b1, m.step), c2 = 1 - Math.pow(b2, m.step);
     m.names.forEach(function (name) {
+      if (m.frozen && m.frozen[name]) return;     // zamrożona macierz nie uczy się wcale
       var p = m[name], g = G[name], st = m.adam[name];
       for (var i = 0; i < p.length; i++) {
         st.m[i] = b1 * st.m[i] + (1 - b1) * g[i];
@@ -363,6 +381,52 @@ window.LU = window.LU || {};
       count++;
     }
     return count ? Math.exp(loss / count) : null;
+  };
+
+  /* Kopia modelu razem ze stanem optymalizatora — dwa warianty mogą startować identycznie. */
+  T.cloneModel = function (m) {
+    var copy = Object.create(null);
+    Object.keys(m).forEach(function (key) { copy[key] = m[key]; });
+    m.names.forEach(function (n) { copy[n] = Float64Array.from(m[n]); });
+    copy.history = m.history.slice();
+    copy.adam = {};
+    m.names.forEach(function (n) {
+      copy.adam[n] = { m: Float64Array.from(m.adam[n].m), v: Float64Array.from(m.adam[n].v) };
+    });
+    copy.frozen = m.frozen ? Object.assign({}, m.frozen) : null;
+    return copy;
+  };
+
+  /* Ostrość uwagi: średnia najwyższa waga w wierszu i średnia entropia (0 = jedno słowo, 1 = wszystkie po równo).
+     Uwaga z losowymi Wq/Wk rozkłada się mniej więcej równo — ta miara pokazuje to wprost. */
+  T.attentionStats = function (m) {
+    var seqs = m.data.sequences;
+    if (!seqs.length) return null;
+    var maxSum = 0, entSum = 0, rows = 0;
+    var stepEvery = Math.max(1, Math.floor(seqs.length / 40));
+    for (var s = 0; s < seqs.length; s += stepEvery) {
+      var ids = seqs[s].slice(0, seqs[s].length - 1);
+      if (ids.length < 2) continue;
+      var c = T.forward(m, ids);
+      for (var i = 1; i < c.att.length; i++) {
+        var row = c.att[i], best = 0, ent = 0;
+        for (var j = 0; j < row.length; j++) {
+          best = Math.max(best, row[j]);
+          if (row[j] > 1e-12) ent -= row[j] * Math.log(row[j]);
+        }
+        maxSum += best;
+        entSum += ent / Math.log(row.length);      // znormalizowana entropia
+        rows++;
+      }
+    }
+    return rows ? { meanMax: maxSum / rows, meanEntropy: entSum / rows, rows: rows } : null;
+  };
+
+  /* Norma euklidesowa tablicy — używana do pokazania siły sygnału uczenia. */
+  T.norm = function (arr) {
+    var acc = 0;
+    for (var i = 0; i < arr.length; i++) acc += arr[i] * arr[i];
+    return Math.sqrt(acc);
   };
 
   /* Pomocnicze operacje udostępnione interfejsowi (symulacja krok po kroku). */

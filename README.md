@@ -19,6 +19,7 @@ na serwer.
 | **Warsztaty** | RLHF, Synthetic Data, Agentic AI | teleturniej RLHF (ocena trzech propozycji, aktualizacja ±1 z podłogą 0, runda o reward hackingu), sztafeta danych syntetycznych z tablicą zubożenia słownika i trybem Jokera, agent zatrzymujący się na interpunkcji, żeby wywołać narzędzie |
 | **Wektory** | poza materiałem źródłowym — most do prawdziwych LLM | kodowanie słów w liczby, nauka osadzeń skip-gram na żywo (mapa PCA + wykres straty), porównywanie wektorów kosinusem (sąsiedzi, analogie, mapa podobieństw) i uproszczona warstwa uwagi z maską przyczynową oraz kodowaniem pozycji |
 | **Transformer** | poza materiałem źródłowym | mały transformer dekoderowy uczony na żywo (wykres straty, zakłopotanie), generowanie słowo po słowie z softmaxu z temperaturą i top-k, porównanie rozkładu sieci z rozkładem bigramu, wagi uwagi oraz ośmioetapowa symulacja jednego przejścia sieci z prawdziwymi liczbami |
+| **Q·K·V** | poza materiałem źródłowym | jak uczą się macierze zapytań, kluczy i wartości: droga sygnału błędu z normami gradientu na każdym etapie, jeden krok Adama na wybranej macierzy (przed / gradient / po) i eksperyment z zamrażaniem macierzy z miarą ostrości uwagi |
 | **Zasady** | — | pełny opis algorytmu po polsku plus sekcja „utknąłeś?” |
 
 Do tego: **przełącznik motywu** w nagłówku (auto zgodnie z systemem / jasny / ciemny, z zapisem wyboru

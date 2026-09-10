@@ -6,7 +6,7 @@
 <title>Kostka i Kartka — zbuduj model językowy własnymi rękami</title>
 <meta name="description" content="Gra przeglądarkowa oparta na LLMs Unplugged: wytrenuj model bigramowy zliczając pary słów w siatce, a potem generuj nowy tekst rzutami kostką d10.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233f4ea8'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='monospace'>d</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css?v=2026-09-10b">
+<link rel="stylesheet" href="assets/css/style.css?v=2026-09-10c">
 </head>
 <body>
 
@@ -21,6 +21,7 @@
       <button role="tab" data-view="shop" aria-selected="false">Warsztaty</button>
       <button role="tab" data-view="vec" aria-selected="false">Wektory</button>
       <button role="tab" data-view="tx" aria-selected="false">Transformer</button>
+      <button role="tab" data-view="qkv" aria-selected="false">Q·K·V</button>
       <button role="tab" data-view="rules" aria-selected="false">Zasady</button>
     </nav>
     <button class="btn theme-btn" id="theme-toggle" type="button" title="Przełącz motyw: automatyczny / jasny / ciemny">
@@ -751,6 +752,104 @@
   </div>
 </section>
 
+<!-- ============================ Q K V ============================ -->
+<section class="view" id="view-qkv" hidden>
+  <div class="panel">
+    <h2>Jak uczą się macierze Q, K i V <span class="sub">— skąd sieć wie, na co ma patrzeć</span></h2>
+    <p class="small muted">
+      W zakładce Transformer widziałeś, że zapytanie, klucz i wartość powstają przez pomnożenie wektora słowa
+      przez trzy macierze. Nikt tych macierzy nie zaprojektował — na starcie są <strong>losowe</strong>.
+      Uczą się wyłącznie dlatego, że model myli się w przewidywaniu następnego słowa, a ta pomyłka wraca
+      przez całą sieć aż do nich. Tutaj można ten sygnał zobaczyć i zmierzyć.
+    </p>
+    <div class="btnrow">
+      <button class="btn primary" id="qkv-train">Ucz model 200 kroków</button>
+      <button class="btn" id="qkv-reset">Od nowa (losowe macierze)</button>
+      <span class="small mono muted" id="qkv-status"></span>
+    </div>
+  </div>
+
+  <!-- 1. ŁAŃCUCH -->
+  <div class="panel">
+    <h3>1. Droga sygnału błędu — od pomyłki do macierzy</h3>
+    <p class="small muted">
+      Wybierz fragment tekstu treningowego i policz gradient. Liczby pod strzałkami to długość wektora
+      poprawek na danym etapie: im większa, tym mocniejszy sygnał tam dociera.
+    </p>
+    <div class="settings">
+      <label class="field">Fragment uczący
+        <select id="qkv-seq"></select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn primary" id="qkv-grad">Policz gradient dla tego fragmentu</button>
+      <span class="small muted" id="qkv-loss"></span>
+    </div>
+    <div id="qkv-chain" style="margin-top:.9rem"></div>
+    <div id="qkv-matnorms" style="margin-top:.9rem"></div>
+  </div>
+
+  <!-- 2. JEDEN KROK -->
+  <div class="panel">
+    <h3>2. Jeden krok uczenia macierzy pod lupą</h3>
+    <div class="settings">
+      <label class="field">Macierz
+        <select id="qkv-which">
+          <option value="Wq">Wq — zapytania</option>
+          <option value="Wk">Wk — klucze</option>
+          <option value="Wv">Wv — wartości</option>
+        </select>
+      </label>
+      <label class="field">Tempo uczenia (lr)
+        <select id="qkv-lr">
+          <option value="0.01">0,01</option>
+          <option value="0.03" selected>0,03</option>
+          <option value="0.1">0,10 — przesadnie duże, żeby było widać</option>
+        </select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn primary" id="qkv-apply">Wykonaj krok Adama na tym gradiencie</button>
+      <span class="small muted" id="qkv-applynote"></span>
+    </div>
+    <div class="grid3" id="qkv-mats" style="margin-top:.9rem"></div>
+    <div id="qkv-cell" style="margin-top:.8rem"></div>
+  </div>
+
+  <!-- 3. PO CO -->
+  <div class="panel">
+    <h3>3. Po co je w ogóle uczyć? Zamroź je i zobacz</h3>
+    <p class="small muted">
+      Najprostszy dowód, że te macierze coś robią: wytrenujmy dwa identyczne modele obok siebie —
+      jeden normalnie, drugi z zamrożonymi wybranymi macierzami (zostają losowe na zawsze).
+      Ta sama liczba kroków, ten sam start, te same dane.
+    </p>
+    <div class="settings">
+      <label class="field">Zamroź w drugim modelu
+        <select id="qkv-freeze">
+          <option value="Wq,Wk" selected>Wq i Wk — uwaga zostaje losowa</option>
+          <option value="Wv">Wv — wartości zostają losowe</option>
+          <option value="Wq,Wk,Wv">Wq, Wk i Wv — cała uwaga losowa</option>
+          <option value="W1,W2">W1 i W2 — zamrożona sieć FFN</option>
+        </select>
+      </label>
+      <label class="field">Długość eksperymentu
+        <select id="qkv-steps">
+          <option value="200">200 kroków</option>
+          <option value="400" selected>400 kroków</option>
+          <option value="800">800 kroków</option>
+        </select>
+      </label>
+    </div>
+    <div class="btnrow" style="margin-top:.7rem">
+      <button class="btn primary" id="qkv-race">Trenuj oba modele</button>
+      <span class="small mono muted" id="qkv-raceinfo"></span>
+    </div>
+    <canvas id="qkv-racechart" height="170" style="margin-top:.9rem" aria-label="Porównanie strat obu modeli"></canvas>
+    <div class="grid2" id="qkv-raceresult" style="margin-top:.9rem"></div>
+  </div>
+</section>
+
 <!-- ============================ ZASADY ============================ -->
 <section class="view" id="view-rules" hidden>
   <div class="panel rules">
@@ -881,6 +980,29 @@
       dropoutu, tokenizacji podsłownej i miliardów słów treningowych. Schemat pojedynczego kroku jest natomiast ten sam.
     </p>
 
+    <h3>Uczenie macierzy Q, K i V</h3>
+    <p>
+      Osobna zakładka <strong>Q·K·V</strong> odpowiada na pytanie, skąd sieć wie, na co ma patrzeć.
+      Macierze zapytań, kluczy i wartości zaczynają jako losowe liczby i uczą się wyłącznie z sygnału błędu:
+    </p>
+    <ol>
+      <li><strong>Droga sygnału</strong> — wybierasz fragment tekstu, gra liczy gradient i pokazuje długość
+        wektora poprawek na każdym etapie: od pomyłki na logitach, przez wektor wyjściowy, sieć FFN, kontekst
+        uwagi i wagi uwagi, aż do zapytań, kluczy i wartości. Widać przy tym, że do wartości dociera sygnał
+        kilkanaście razy silniejszy niż do zapytań i kluczy — stąd uwaga uczy się wolniej niż reszta sieci.</li>
+      <li><strong>Jeden krok pod lupą</strong> — macierz przed poprawką, jej gradient i macierz po kroku
+        optymalizatora Adam, z wypisaną komórką, która zmieniła się najbardziej.</li>
+      <li><strong>Eksperyment z zamrażaniem</strong> — dwa identyczne modele uczone obok siebie, jeden
+        normalnie, drugi z zamrożonymi wybranymi macierzami. Porównujemy stratę, zakłopotanie i <em>ostrość
+        uwagi</em>: ile wagi model średnio skupia na jednym słowie. Wyuczona uwaga daje zwykle 80–90%,
+        losowa rozkłada się prawie równo.</li>
+    </ol>
+    <p class="small muted">
+      Uwaga na uczciwość wyniku: na tekście długości kilkudziesięciu słów zamrożony model potrafi wypaść
+      w zakłopotaniu tak samo dobrze albo i lepiej — bo taki tekst da się po prostu zapamiętać. Przewaga
+      wyuczonej uwagi rośnie z długością tekstu, natomiast różnicę w samym mechanizmie uwagi widać od razu.
+    </p>
+
     <h3>Jasne i ciemne tło</h3>
     <p>
       Przycisk w prawym górnym rogu przełącza motyw w kółko: <strong>auto</strong> (zgodnie z ustawieniami
@@ -912,24 +1034,25 @@
   <div class="wrap">
     Kostka i Kartka — gra na podstawie <a href="https://www.llmsunplugged.org/" target="_blank" rel="noopener">LLMs Unplugged</a>
     (ANU School of Cybernetics / Ben Swift). Wszystko liczy się lokalnie w twojej przeglądarce, nic nie jest wysyłane na serwer.
-    <span class="mono small" style="display:block;margin-top:.4rem">wersja <span id="build-version">2026-09-10b</span></span>
+    <span class="mono small" style="display:block;margin-top:.4rem">wersja <span id="build-version">2026-09-10c</span></span>
   </div>
 </footer>
 
-<script src="assets/js/texts.js?v=2026-09-10b"></script>
-<script src="assets/js/lm.js?v=2026-09-10b"></script>
-<script src="assets/js/app.js?v=2026-09-10b"></script>
-<script src="assets/js/train.js?v=2026-09-10b"></script>
-<script src="assets/js/generate.js?v=2026-09-10b"></script>
-<script src="assets/js/lab.js?v=2026-09-10b"></script>
-<script src="assets/js/print.js?v=2026-09-10b"></script>
-<script src="assets/js/rlhf.js?v=2026-09-10b"></script>
-<script src="assets/js/relay.js?v=2026-09-10b"></script>
-<script src="assets/js/agent.js?v=2026-09-10b"></script>
-<script src="assets/js/vec-engine.js?v=2026-09-10b"></script>
-<script src="assets/js/vectors.js?v=2026-09-10b"></script>
-<script src="assets/js/tx-engine.js?v=2026-09-10b"></script>
-<script src="assets/js/transformer.js?v=2026-09-10b"></script>
+<script src="assets/js/texts.js?v=2026-09-10c"></script>
+<script src="assets/js/lm.js?v=2026-09-10c"></script>
+<script src="assets/js/app.js?v=2026-09-10c"></script>
+<script src="assets/js/train.js?v=2026-09-10c"></script>
+<script src="assets/js/generate.js?v=2026-09-10c"></script>
+<script src="assets/js/lab.js?v=2026-09-10c"></script>
+<script src="assets/js/print.js?v=2026-09-10c"></script>
+<script src="assets/js/rlhf.js?v=2026-09-10c"></script>
+<script src="assets/js/relay.js?v=2026-09-10c"></script>
+<script src="assets/js/agent.js?v=2026-09-10c"></script>
+<script src="assets/js/vec-engine.js?v=2026-09-10c"></script>
+<script src="assets/js/vectors.js?v=2026-09-10c"></script>
+<script src="assets/js/tx-engine.js?v=2026-09-10c"></script>
+<script src="assets/js/transformer.js?v=2026-09-10c"></script>
+<script src="assets/js/qkv.js?v=2026-09-10c"></script>
 <script>LU.boot();</script>
 </body>
 </html>

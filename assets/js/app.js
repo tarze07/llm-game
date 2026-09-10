@@ -119,7 +119,8 @@ window.LU = window.LU || {};
     { id: "toolcall", icon: "🛠️", label: "Trzy wywołania narzędzia" },
     { id: "printer", icon: "🖨️", label: "Model wydrukowany na papier" },
     { id: "vectors", icon: "🧭", label: "Wektory i uwaga obejrzane" },
-    { id: "neuron", icon: "🤖", label: "Transformer wytrenowany" }
+    { id: "neuron", icon: "🤖", label: "Transformer wytrenowany" },
+    { id: "qkv", icon: "🔍", label: "Uczenie Q, K i V obejrzane" }
   ];
 
   /* --- Motyw: automatyczny (z systemu), jasny albo ciemny --- */
@@ -239,6 +240,8 @@ window.LU = window.LU || {};
     if (name !== "vec" && LU.Vectors) LU.Vectors.onLeave();
     if (name === "tx" && LU.Transformer) LU.Transformer.onEnter();
     if (name !== "tx" && LU.Transformer) LU.Transformer.onLeave();
+    if (name === "qkv" && LU.Qkv) { LU.Qkv.onEnter(); LU.award("qkv"); }
+    if (name !== "qkv" && LU.Qkv) LU.Qkv.onLeave();
     if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -365,7 +368,7 @@ window.LU = window.LU || {};
        podręcznej przeglądarki) nie może wtedy wyłączyć całej reszty strony. */
     [["Train", LU.Train], ["Gen", LU.Gen], ["Lab", LU.Lab], ["Print", LU.Print],
      ["Rlhf", LU.Rlhf], ["Relay", LU.Relay], ["Agent", LU.Agent],
-     ["Vectors", LU.Vectors], ["Transformer", LU.Transformer]].forEach(function (pair) {
+     ["Vectors", LU.Vectors], ["Transformer", LU.Transformer], ["Qkv", LU.Qkv]].forEach(function (pair) {
       if (!pair[1] || typeof pair[1].init !== "function") {
         console.warn("Kostka i Kartka: brak modułu " + pair[0] + " — odśwież stronę z pominięciem pamięci podręcznej (Ctrl+Shift+R).");
         return;
@@ -375,6 +378,6 @@ window.LU = window.LU || {};
     });
 
     var initial = location.hash.slice(1);
-    LU.setView(["start", "train", "gen", "lab", "shop", "vec", "tx", "rules"].indexOf(initial) >= 0 ? initial : "start");
+    LU.setView(["start", "train", "gen", "lab", "shop", "vec", "tx", "qkv", "rules"].indexOf(initial) >= 0 ? initial : "start");
   };
 })(window.LU);
